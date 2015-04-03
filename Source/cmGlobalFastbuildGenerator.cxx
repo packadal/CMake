@@ -61,7 +61,7 @@ cmGlobalGeneratorFactory* cmGlobalFastbuildGenerator::NewFactory()
 //----------------------------------------------------------------------------
 cmGlobalFastbuildGenerator::cmGlobalFastbuildGenerator()
 {
-
+	this->FindMakeProgramFile = "CMakeFastbuildFindMake.cmake";
 }
 
 //----------------------------------------------------------------------------
@@ -81,7 +81,7 @@ cmLocalGenerator *cmGlobalFastbuildGenerator::CreateLocalGenerator()
 //----------------------------------------------------------------------------
 void cmGlobalFastbuildGenerator::Generate()
 {
-
+	
 }
 
 //----------------------------------------------------------------------------
