@@ -59,6 +59,7 @@
 #    include "cmGlobalVisualStudio11Generator.h"
 #    include "cmGlobalVisualStudio12Generator.h"
 #    include "cmGlobalVisualStudio14Generator.h"
+#	 include "cmGlobalFastbuildGenerator.h"
 #    include "cmGlobalBorlandMakefileGenerator.h"
 #    include "cmGlobalNMakeMakefileGenerator.h"
 #    include "cmGlobalJOMMakefileGenerator.h"
@@ -1830,6 +1831,8 @@ void cmake::AddDefaultGenerators()
     cmGlobalVisualStudio8Generator::NewFactory());
   this->Generators.push_back(
     cmGlobalVisualStudio9Generator::NewFactory());
+  this->Generators.push_back(
+    cmGlobalFastbuildGenerator::NewFactory());
   this->Generators.push_back(
     cmGlobalBorlandMakefileGenerator::NewFactory());
   this->Generators.push_back(
