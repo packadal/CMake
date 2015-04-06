@@ -53,6 +53,31 @@ public:
 };
 
 //----------------------------------------------------------------------------
+class cmGlobalFastbuildGenerator::Detail
+{
+public:
+	static void GenerateRootBFF(cmGlobalFastbuildGenerator * self)
+	{
+		// Debug info:
+		self->GetMakefile()->print();
+
+		// Open file
+		// Output header
+		// Output settings
+		// Output compiler definitions
+		// Output configuration definitions
+
+		// Sort targets
+		// Output target definitions
+		// Output target libraries/config permutations
+
+		// Output aliases
+
+		// Close file
+	}
+};
+
+//----------------------------------------------------------------------------
 cmGlobalGeneratorFactory* cmGlobalFastbuildGenerator::NewFactory()
 {
 	return new Factory();
@@ -71,6 +96,12 @@ cmGlobalFastbuildGenerator::~cmGlobalFastbuildGenerator()
 }
 
 //----------------------------------------------------------------------------
+std::string cmGlobalFastbuildGenerator::GetName() const 
+{
+	return fastbuildGeneratorName; 
+}
+
+//----------------------------------------------------------------------------
 cmLocalGenerator *cmGlobalFastbuildGenerator::CreateLocalGenerator()
 {
 	cmLocalGenerator * lg = new cmLocalFastbuildGenerator();
@@ -81,8 +112,65 @@ cmLocalGenerator *cmGlobalFastbuildGenerator::CreateLocalGenerator()
 //----------------------------------------------------------------------------
 void cmGlobalFastbuildGenerator::Generate()
 {
-	
+	// Execute the standard generate process
+	cmGlobalGenerator::Generate();
+
+	// Now execute the extra fastbuild process
+	Detail::GenerateRootBFF( this );
 }
 
 //----------------------------------------------------------------------------
+void cmGlobalFastbuildGenerator::GenerateBuildCommand(
+  std::vector<std::string>& makeCommand,
+  const std::string& makeProgram,
+  const std::string& projectName,
+  const std::string& projectDir,
+  const std::string& targetName,
+  const std::string& config,
+  bool fast, bool verbose,
+  std::vector<std::string> const& makeOptions)
+{
+	// A build command for fastbuild looks like this:
+	// fbuild.exe [make-options] <target>-<config>
 
+	// Setup make options
+	std::vector<std::string> makeOptionsSelected;
+
+	// Select the caller- or user-preferred make program
+	std::string makeProgramSelected =
+		this->SelectMakeProgram(makeProgram);
+
+	// Select the target
+	std::string targetSelected = targetName;
+	if(targetSelected.empty())
+    {
+		targetSelected = "all";// VS uses "ALL_BUILD"; might be useful
+    }
+	if (targetSelected == "clean")
+    {
+		makeOptionsSelected.push_back("-clean");
+		targetSelected = "";
+    }
+  
+	// Select the config
+	std::string configSelected = config;
+	if (configSelected.empty())
+    {
+		configSelected = "Debug";
+	}
+
+	// Build the command
+	makeCommand.push_back(makeProgramSelected);
+	
+	// Push in the make options
+	makeCommand.insert(makeCommand.end(), makeOptionsSelected.begin(), makeOptionsSelected.end());
+
+	// Add the target-config to the command
+	if (!targetSelected.empty())
+	{
+		std::string realTarget = targetSelected + "-" + configSelected;
+		makeCommand.push_back(realTarget);
+	}
+}
+
+//----------------------------------------------------------------------------
