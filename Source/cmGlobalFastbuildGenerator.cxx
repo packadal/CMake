@@ -58,6 +58,22 @@ public:
 class cmGlobalFastbuildGenerator::Detail
 {
 public:
+	struct FastbuildFileContext
+	{
+		cmGeneratedFileStream & fout;
+		cmGlobalFastbuildGenerator * self;
+		cmLocalGenerator* root;
+		std::vector<cmLocalGenerator*>& generators;
+		std::string linePrefix;
+	};
+
+	struct FastbuildVariable
+	{
+		std::string key;
+		std::string value;
+	};
+	typedef std::vector<FastbuildVariable> FastbuildVariables;
+
 	static void GenerateRootBFF(cmGlobalFastbuildGenerator * self,
 		cmLocalGenerator* root, std::vector<cmLocalGenerator*>& generators)
 	{
@@ -78,7 +94,10 @@ public:
 			return;
 		}
 
-		WriteRootBFF(self, fout, root, generators);
+		FastbuildFileContext context = {
+			fout, self, root, generators, ""
+			};
+		WriteRootBFF(context);
 		
 		// Close file
 		if (fout.Close())
@@ -87,35 +106,33 @@ public:
 		}
 	}
 
-	static void WriteRootBFF(cmGlobalFastbuildGenerator * self,
-		cmGeneratedFileStream & fout,
-		cmLocalGenerator* root, std::vector<cmLocalGenerator*>& generators)
+	static void WriteRootBFF(FastbuildFileContext& context)
 	{
 		WriteSectionHeader( fout, "Fastbuild makefile - Generated using CMAKE" );
 
 		WriteSettings( fout );
 		WriteCompilers( self, fout, root );
-		WriteConfigurations( fout );
+		WriteConfigurations( self, fout, root );
 
 		// Sort targets
 
-		WriteTargetDefinitions( fout );
+		WriteTargetDefinitions( self, fout, root, generators );
 		WriteTargets( fout );
 		WriteAliases( fout );
 	}
 
-	static void WriteComment(cmGeneratedFileStream & fout, const char * comment)
+	static void WriteComment(FastbuildFileContext& context, const char * comment)
 	{
 		fout << ";" << comment << "\n";
 	}
 
-	static void WriteLine(cmGeneratedFileStream & fout)
+	static void WriteLine(FastbuildFileContext& context)
 	{
 		WriteComment(fout, 
 			"-------------------------------------------------------------------------------");
 	}
 
-	static void WriteSectionHeader(cmGeneratedFileStream & fout, const char * section)
+	static void WriteSectionHeader(cFastbuildFileContext& context, const char * section)
 	{
 		fout << "\n";
 		WriteLine( fout );
@@ -123,10 +140,21 @@ public:
 		WriteLine( fout );
 	}
 
-	
-	static void WriteSettings( cmGeneratedFileStream & fout )
+	static void WriteFastbuildVariable( FastbuildFileContext& context )
 	{
-		WriteSectionHeader( fout, "Settings" );
+		
+	}
+
+	static void WriteFastbuildStruct( FastbuildFileContext& context, 
+		const char * structName,
+		const FastbuildVariables& variables )
+	{
+		
+	}
+	
+	static void WriteSettings( FastbuildFileContext& context )
+	{
+		WriteSectionHeader( context, "Settings" );
 
 		fout << "Settings\n";
 		fout << "{\n";
@@ -134,13 +162,11 @@ public:
 		fout << "}\n";
 	}
 
-	static bool WriteCompilers( cmGlobalFastbuildGenerator * self,
-		cmGeneratedFileStream & fout,
-		cmLocalGenerator* root )
+	static bool WriteCompilers( FastbuildFileContext& context )
 	{
 		cmMakefile *mf = root->GetMakefile();
 
-		WriteSectionHeader( fout, "Compilers" );
+		WriteSectionHeader( context, "Compilers" );
 
 		// Calculate the root location of the compiler
 		std::string cxxCompilerLocation = mf->GetDefinition("CMAKE_CXX_COMPILER") ?
@@ -150,13 +176,15 @@ public:
 		{
 			return false;
 		}
-		cmSystemTools::ConvertToOutputSlashes(cxxCompilerLocation);
 
 		// Strip out the path to the compiler
 		std::string cxxCompilerPath = 
 			cmSystemTools::GetFilenamePath( cxxCompilerLocation );
 		std::string cxxCompilerFile = "$Root$\\" +
 			cmSystemTools::GetFilenameName( cxxCompilerLocation );
+
+		cmSystemTools::ConvertToOutputSlashes( cxxCompilerPath );
+		cmSystemTools::ConvertToOutputSlashes( cxxCompilerFile );
 
 		// Write out the compiler that has been configured
 		fout << "Compiler( 'Compiler-default' )\n";
@@ -168,27 +196,59 @@ public:
 		return true;
 	}
 	
-	static void WriteConfigurations( cmGeneratedFileStream & fout )
+	static void WriteConfigurations(FastbuildFileContext& context)
 	{
-		WriteSectionHeader( fout, "Configurations" );
+		WriteSectionHeader( context, "Configurations" );
 
 		// Iterate over all configurations and define them:
+		for(std::vector<std::string>::iterator iter = self->Configurations.begin();
+			iter != self->Configurations.end(); ++iter)
+		{
+			std::string & configName = *iter;
+			std::vector<std::string
+
+			WriteFastbuildStruct( fout, "config-" + configName, 
+				)
+			fout << "\t\t" << *i << "|" << this->GetPlatformName()
+			<< " = "  << *i << "|" << this->GetPlatformName() << "\n";
+		}
+	}
+
+	static void WriteTargetDefinitions(FastbuildFileContext& context)
+	{
+		WriteSectionHeader( context, "Target Definitions" );
+
+		// Iterate over each of the targets
+		for (std::vector<cmLocalGenerator*>::iterator iter = generators.begin();
+			iter != generators.end(); ++iter)
+		{
+			cmLocalGenerator *lg = *iter;
+
+			cmTargets &tgts = lg->GetMakefile()->GetTargets();
+			for(cmTargets::iterator targetIter = tgts.begin(); targetIter != tgts.end(); 
+				++targetIter)
+			{
+				cmTarget &target = targetIter->second;
+				if(target.GetType() == cmTarget::INTERFACE_LIBRARY)
+				{
+					continue;
+				}
+				
+				fout << target.GetName() << "\n";
+			}
+		}
+		
 
 	}
 
-	static void WriteTargetDefinitions( cmGeneratedFileStream & fout )
+	static void WriteTargets(FastbuildFileContext& context)
 	{
-		WriteSectionHeader( fout, "Target Definitions" );
+		WriteSectionHeader( context, "Targets" );
 	}
 
-	static void WriteTargets( cmGeneratedFileStream & fout )
+	static void WriteAliases(FastbuildFileContext& context)
 	{
-		WriteSectionHeader( fout, "Targets" );
-	}
-
-	static void WriteAliases( cmGeneratedFileStream & fout )
-	{
-		WriteSectionHeader( fout, "Aliases" );
+		WriteSectionHeader( context, "Aliases" );
 	}
 };
 
