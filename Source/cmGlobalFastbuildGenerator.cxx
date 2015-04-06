@@ -59,7 +59,7 @@ public:
 	static void GenerateRootBFF(cmGlobalFastbuildGenerator * self)
 	{
 		// Debug info:
-		self->GetMakefile()->print();
+		//self->GetMakefile()->print();
 
 		// Open file
 		// Output header
