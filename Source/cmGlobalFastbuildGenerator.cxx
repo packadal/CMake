@@ -18,6 +18,8 @@
 #include "cmMakefile.h"
 #include "cmSourceFile.h"
 #include "cmTarget.h"
+#include "cmGeneratedFileStream.h"
+#include "cmLocalGenerator.h"
 #include <cmsys/Encoding.hxx>
 
 static const char fastbuildGeneratorName[] = "Fastbuild";
@@ -56,24 +58,137 @@ public:
 class cmGlobalFastbuildGenerator::Detail
 {
 public:
-	static void GenerateRootBFF(cmGlobalFastbuildGenerator * self)
+	static void GenerateRootBFF(cmGlobalFastbuildGenerator * self,
+		cmLocalGenerator* root, std::vector<cmLocalGenerator*>& generators)
 	{
 		// Debug info:
-		//self->GetMakefile()->print();
+		std::cout << "======== GLOBAL Fastbuild Gen ========\n";
 
+		// Calculate filename
+		std::string fname = root->GetMakefile()->GetStartOutputDirectory();
+		fname += "/";
+		fname += root->GetMakefile()->GetProjectName();
+		fname += ".bff";
+		
 		// Open file
-		// Output header
-		// Output settings
-		// Output compiler definitions
-		// Output configuration definitions
+		cmGeneratedFileStream fout(fname.c_str());
+		fout.SetCopyIfDifferent(true);
+		if(!fout)
+		{
+			return;
+		}
+
+		WriteRootBFF(self, fout, root, generators);
+		
+		// Close file
+		if (fout.Close())
+		{
+			self->FileReplacedDuringGenerate(fname);
+		}
+	}
+
+	static void WriteRootBFF(cmGlobalFastbuildGenerator * self,
+		cmGeneratedFileStream & fout,
+		cmLocalGenerator* root, std::vector<cmLocalGenerator*>& generators)
+	{
+		WriteSectionHeader( fout, "Fastbuild makefile - Generated using CMAKE" );
+
+		WriteSettings( fout );
+		WriteCompilers( self, fout, root );
+		WriteConfigurations( fout );
 
 		// Sort targets
-		// Output target definitions
-		// Output target libraries/config permutations
 
-		// Output aliases
+		WriteTargetDefinitions( fout );
+		WriteTargets( fout );
+		WriteAliases( fout );
+	}
 
-		// Close file
+	static void WriteComment(cmGeneratedFileStream & fout, const char * comment)
+	{
+		fout << ";" << comment << "\n";
+	}
+
+	static void WriteLine(cmGeneratedFileStream & fout)
+	{
+		WriteComment(fout, 
+			"-------------------------------------------------------------------------------");
+	}
+
+	static void WriteSectionHeader(cmGeneratedFileStream & fout, const char * section)
+	{
+		fout << "\n";
+		WriteLine( fout );
+		WriteComment( fout, section );
+		WriteLine( fout );
+	}
+
+	
+	static void WriteSettings( cmGeneratedFileStream & fout )
+	{
+		WriteSectionHeader( fout, "Settings" );
+
+		fout << "Settings\n";
+		fout << "{\n";
+		fout << "\t.CachePath = \"C:\\.fbuild.cache\"\n";
+		fout << "}\n";
+	}
+
+	static bool WriteCompilers( cmGlobalFastbuildGenerator * self,
+		cmGeneratedFileStream & fout,
+		cmLocalGenerator* root )
+	{
+		cmMakefile *mf = root->GetMakefile();
+
+		WriteSectionHeader( fout, "Compilers" );
+
+		// Calculate the root location of the compiler
+		std::string cxxCompilerLocation = mf->GetDefinition("CMAKE_CXX_COMPILER") ?
+            mf->GetSafeDefinition("CMAKE_CXX_COMPILER") :
+            mf->GetSafeDefinition("CMAKE_C_COMPILER");
+		if (cxxCompilerLocation.empty())
+		{
+			return false;
+		}
+		cmSystemTools::ConvertToOutputSlashes(cxxCompilerLocation);
+
+		// Strip out the path to the compiler
+		std::string cxxCompilerPath = 
+			cmSystemTools::GetFilenamePath( cxxCompilerLocation );
+		std::string cxxCompilerFile = "$Root$\\" +
+			cmSystemTools::GetFilenameName( cxxCompilerLocation );
+
+		// Write out the compiler that has been configured
+		fout << "Compiler( 'Compiler-default' )\n";
+		fout << "{\n";
+		fout << "\t.Root = \'" << cxxCompilerPath << "\'\n";
+		fout << "\t.Executable = \'" << cxxCompilerFile << "\'\n";
+		fout << "}\n";
+
+		return true;
+	}
+	
+	static void WriteConfigurations( cmGeneratedFileStream & fout )
+	{
+		WriteSectionHeader( fout, "Configurations" );
+
+		// Iterate over all configurations and define them:
+
+	}
+
+	static void WriteTargetDefinitions( cmGeneratedFileStream & fout )
+	{
+		WriteSectionHeader( fout, "Target Definitions" );
+	}
+
+	static void WriteTargets( cmGeneratedFileStream & fout )
+	{
+		WriteSectionHeader( fout, "Targets" );
+	}
+
+	static void WriteAliases( cmGeneratedFileStream & fout )
+	{
+		WriteSectionHeader( fout, "Aliases" );
 	}
 };
 
@@ -115,8 +230,12 @@ void cmGlobalFastbuildGenerator::Generate()
 	// Execute the standard generate process
 	cmGlobalGenerator::Generate();
 
-	// Now execute the extra fastbuild process
-	Detail::GenerateRootBFF( this );
+	// Now execute the extra fastbuild process on the project map
+	std::map<std::string, std::vector<cmLocalGenerator*> >::iterator it;
+	for(it = this->ProjectMap.begin(); it!= this->ProjectMap.end(); ++it)
+	{
+		Detail::GenerateRootBFF( this, it->second[0], it->second );
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -131,7 +250,7 @@ void cmGlobalFastbuildGenerator::GenerateBuildCommand(
   std::vector<std::string> const& makeOptions)
 {
 	// A build command for fastbuild looks like this:
-	// fbuild.exe [make-options] <target>-<config>
+	// fbuild.exe [make-options] [-config projectName.bff] <target>-<config>
 
 	// Setup make options
 	std::vector<std::string> makeOptionsSelected;
@@ -164,6 +283,8 @@ void cmGlobalFastbuildGenerator::GenerateBuildCommand(
 	
 	// Push in the make options
 	makeCommand.insert(makeCommand.end(), makeOptionsSelected.begin(), makeOptionsSelected.end());
+	makeCommand.push_back("-config");
+	makeCommand.push_back(projectName + ".bff");
 
 	// Add the target-config to the command
 	if (!targetSelected.empty())

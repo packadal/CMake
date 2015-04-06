@@ -20,13 +20,25 @@
 //----------------------------------------------------------------------------
 cmLocalFastbuildGenerator::cmLocalFastbuildGenerator()
 {
-
+#ifdef _WIN32
+  this->WindowsShell = true;
+#endif
 }
 
 //----------------------------------------------------------------------------
 cmLocalFastbuildGenerator::~cmLocalFastbuildGenerator()
 {
 
+}
+
+//----------------------------------------------------------------------------
+void cmLocalFastbuildGenerator::Generate()
+{
+	// Debug messages
+	std::cout << "======== LOCAL Fastbuild Gen ========\n";
+	GetMakefile()->Print();
+
+	// Now generate information for this generator
 }
 
 //----------------------------------------------------------------------------

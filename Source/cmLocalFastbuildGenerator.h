@@ -32,8 +32,10 @@ class cmLocalFastbuildGenerator
 {
 public:
   
-  cmLocalFastbuildGenerator();
-  virtual ~cmLocalFastbuildGenerator();
+	cmLocalFastbuildGenerator();
+	virtual ~cmLocalFastbuildGenerator();
+
+	virtual void Generate();
 
 };
 
