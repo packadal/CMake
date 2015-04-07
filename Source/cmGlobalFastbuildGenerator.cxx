@@ -66,6 +66,7 @@ public:
 		cmLocalGenerator* root;
 		std::vector<cmLocalGenerator*>& generators;
 		std::string linePrefix;
+		std::string closingScope;
 	};
 
 	struct FastbuildVariable
@@ -141,23 +142,32 @@ public:
 		WriteLine( context );
 	}
 
-	static void WritePushScope( FastbuildFileContext& context )
+	static void WritePushScope( FastbuildFileContext& context, char begin = '{', char end = '}' )
 	{
-		context.fout << context.linePrefix << "{\n";
+		context.fout << context.linePrefix << begin << "\n";
 		context.linePrefix += "\t";
+		context.closingScope += end;
+	}
+
+	static void WritePushScopeStruct( FastbuildFileContext& context )
+	{
+		WritePushScope( context, '[', ']' );
 	}
 
 	static void WritePopScope( FastbuildFileContext& context )
 	{
 		assert( !context.linePrefix.empty() );
 		context.linePrefix.resize( context.linePrefix.size() - 1 );
+		
+		context.fout << context.linePrefix << context.closingScope[context.closingScope.size() - 1] << 
+			"\n";
 
-		context.fout << context.linePrefix << "}\n";
+		context.closingScope.resize( context.closingScope.size() - 1 );
 	}
 
 	static void WriteVariable( FastbuildFileContext& context, const std::string& key, const std::string& value )
 	{
-		context.fout << context.linePrefix << 
+		context.fout << context.linePrefix << "." <<
 			key << " = " << value << "\n";
 	}
 
@@ -170,13 +180,6 @@ public:
 			context.fout << "(" << value << ")";
 		}
 		context.fout << "\n";
-	}
-
-	static void WriteStruct( FastbuildFileContext& context, 
-		const char * structName,
-		const FastbuildVariables& variables )
-	{
-		
 	}
 	
 	static void WriteSettings( FastbuildFileContext& context )
@@ -229,7 +232,7 @@ public:
 		WriteSectionHeader( context, "Configurations" );
 
 		WriteVariable( context, "ConfigBase", "" );
-		WritePushScope( context );
+		WritePushScopeStruct( context );
 		WriteVariable( context, "Compiler", "'Compiler-default'" );
 		WriteVariable( context, "Librarian", "'$CompilerRoot$\\lib.exe'" );
 		WriteVariable( context, "Linker", "'$CompilerRoot$\\link.exe'" );
@@ -275,20 +278,29 @@ public:
 				std::string targetName = "TargetDef_" + target.GetName();
 				
 				WriteVariable( context, targetName, "" );
-				WritePushScope( context );
+				WritePushScopeStruct( context );
 
 				cmGeneratorTarget *gt = context.self->GetGeneratorTarget(&target);
 				// get a list of source files
 				std::vector<cmSourceFile const*> objectSources;
 				gt->GetObjectSources(objectSources, "");
 				
+				WriteVariable( context, "CompilerInputFiles", "");
+				WritePushScope( context );
 				for (std::vector<cmSourceFile const*>::iterator sourceIter = objectSources.begin();
 					sourceIter != objectSources.end(); ++sourceIter)
 				{
+					bool isFirst = sourceIter == objectSources.begin();
 					cmSourceFile const *srcFile = *sourceIter;
 					std::string sourceFile = srcFile->GetFullPath();
+					context.fout << context.linePrefix;
+					if (!isFirst)
+					{
+						context.fout << ',';
+					}
 					context.fout << sourceFile << "\n";
 				}
+				WritePopScope( context );
 				
 				// Get include directories
 				/*
