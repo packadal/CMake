@@ -21,6 +21,7 @@
 #include "cmGeneratedFileStream.h"
 #include "cmLocalGenerator.h"
 #include <cmsys/Encoding.hxx>
+#include <assert.h>
 
 static const char fastbuildGeneratorName[] = "Fastbuild";
 
@@ -108,44 +109,70 @@ public:
 
 	static void WriteRootBFF(FastbuildFileContext& context)
 	{
-		WriteSectionHeader( fout, "Fastbuild makefile - Generated using CMAKE" );
+		WriteSectionHeader( context, "Fastbuild makefile - Generated using CMAKE" );
 
-		WriteSettings( fout );
-		WriteCompilers( self, fout, root );
-		WriteConfigurations( self, fout, root );
+		WriteSettings( context );
+		WriteCompilers( context );
+		WriteConfigurations( context );
 
 		// Sort targets
 
-		WriteTargetDefinitions( self, fout, root, generators );
-		WriteTargets( fout );
-		WriteAliases( fout );
+		WriteTargetDefinitions( context );
+		WriteTargets( context );
+		WriteAliases( context );
 	}
 
 	static void WriteComment(FastbuildFileContext& context, const char * comment)
 	{
-		fout << ";" << comment << "\n";
+		context.fout << ";" << comment << "\n";
 	}
 
 	static void WriteLine(FastbuildFileContext& context)
 	{
-		WriteComment(fout, 
-			"-------------------------------------------------------------------------------");
+		context.fout << 
+			";-------------------------------------------------------------------------------\n";
 	}
 
-	static void WriteSectionHeader(cFastbuildFileContext& context, const char * section)
+	static void WriteSectionHeader( FastbuildFileContext& context, const char * section )
 	{
-		fout << "\n";
-		WriteLine( fout );
-		WriteComment( fout, section );
-		WriteLine( fout );
+		context.fout << "\n";
+		WriteLine( context );
+		WriteComment( context, section );
+		WriteLine( context );
 	}
 
-	static void WriteFastbuildVariable( FastbuildFileContext& context )
+	static void WritePushScope( FastbuildFileContext& context )
 	{
-		
+		context.fout << context.linePrefix << "{\n";
+		context.linePrefix += "\t";
 	}
 
-	static void WriteFastbuildStruct( FastbuildFileContext& context, 
+	static void WritePopScope( FastbuildFileContext& context )
+	{
+		assert( !context.linePrefix.empty() );
+		context.linePrefix.resize( context.linePrefix.size() - 1 );
+
+		context.fout << context.linePrefix << "}\n";
+	}
+
+	static void WriteVariable( FastbuildFileContext& context, const std::string& key, const std::string& value )
+	{
+		context.fout << context.linePrefix << 
+			key << " = " << value << "\n";
+	}
+
+	static void WriteCommand( FastbuildFileContext& context, const std::string& command, const std::string& value = std::string())
+	{
+		context.fout << context.linePrefix << 
+			command;
+		if (!value.empty())
+		{
+			context.fout << "(" << value << ")";
+		}
+		context.fout << "\n";
+	}
+
+	static void WriteStruct( FastbuildFileContext& context, 
 		const char * structName,
 		const FastbuildVariables& variables )
 	{
@@ -156,15 +183,15 @@ public:
 	{
 		WriteSectionHeader( context, "Settings" );
 
-		fout << "Settings\n";
-		fout << "{\n";
-		fout << "\t.CachePath = \"C:\\.fbuild.cache\"\n";
-		fout << "}\n";
+		WriteCommand( context, "Settings" );
+		WritePushScope( context );
+		WriteVariable( context, "CachePath", "\"C:\\.fbuild.cache\"");
+		WritePopScope( context );
 	}
 
 	static bool WriteCompilers( FastbuildFileContext& context )
 	{
-		cmMakefile *mf = root->GetMakefile();
+		cmMakefile *mf = context.root->GetMakefile();
 
 		WriteSectionHeader( context, "Compilers" );
 
@@ -180,18 +207,19 @@ public:
 		// Strip out the path to the compiler
 		std::string cxxCompilerPath = 
 			cmSystemTools::GetFilenamePath( cxxCompilerLocation );
-		std::string cxxCompilerFile = "$Root$\\" +
+		std::string cxxCompilerFile = "$CompilerRoot$\\" +
 			cmSystemTools::GetFilenameName( cxxCompilerLocation );
 
 		cmSystemTools::ConvertToOutputSlashes( cxxCompilerPath );
 		cmSystemTools::ConvertToOutputSlashes( cxxCompilerFile );
 
 		// Write out the compiler that has been configured
-		fout << "Compiler( 'Compiler-default' )\n";
-		fout << "{\n";
-		fout << "\t.Root = \'" << cxxCompilerPath << "\'\n";
-		fout << "\t.Executable = \'" << cxxCompilerFile << "\'\n";
-		fout << "}\n";
+		WriteVariable( context, "CompilerRoot", "'" + cxxCompilerPath + "'" );
+
+		WriteCommand( context, "Compiler", "'Compiler-default'");
+		WritePushScope( context );
+		WriteVariable( context, "Executable", "'" + cxxCompilerFile + "'" );
+		WritePopScope( context );
 
 		return true;
 	}
@@ -200,18 +228,28 @@ public:
 	{
 		WriteSectionHeader( context, "Configurations" );
 
+		WriteVariable( context, "ConfigBase", "" );
+		WritePushScope( context );
+		WriteVariable( context, "Compiler", "'Compiler-default'" );
+		WriteVariable( context, "Librarian", "'$CompilerRoot$\\lib.exe'" );
+		WriteVariable( context, "Linker", "'$CompilerRoot$\\link.exe'" );
+		WritePopScope( context );
+
 		// Iterate over all configurations and define them:
-		for(std::vector<std::string>::iterator iter = self->Configurations.begin();
-			iter != self->Configurations.end(); ++iter)
+		/*
+		for(std::vector<std::string>::iterator iter = context.self->Configurations.begin();
+			iter != context.self->Configurations.end(); ++iter)
 		{
 			std::string & configName = *iter;
+			/*
 			std::vector<std::string
 
-			WriteFastbuildStruct( fout, "config-" + configName, 
+			WriteStruct( context, "config-" + configName, 
 				)
-			fout << "\t\t" << *i << "|" << this->GetPlatformName()
+			context.fout << "\t\t" << *i << "|" << this->GetPlatformName()
 			<< " = "  << *i << "|" << this->GetPlatformName() << "\n";
 		}
+		*/
 	}
 
 	static void WriteTargetDefinitions(FastbuildFileContext& context)
@@ -219,8 +257,8 @@ public:
 		WriteSectionHeader( context, "Target Definitions" );
 
 		// Iterate over each of the targets
-		for (std::vector<cmLocalGenerator*>::iterator iter = generators.begin();
-			iter != generators.end(); ++iter)
+		for (std::vector<cmLocalGenerator*>::iterator iter = context.generators.begin();
+			iter != context.generators.end(); ++iter)
 		{
 			cmLocalGenerator *lg = *iter;
 
@@ -234,7 +272,35 @@ public:
 					continue;
 				}
 				
-				fout << target.GetName() << "\n";
+				std::string targetName = "TargetDef_" + target.GetName();
+				
+				WriteVariable( context, targetName, "" );
+				WritePushScope( context );
+
+				cmGeneratorTarget *gt = context.self->GetGeneratorTarget(&target);
+				// get a list of source files
+				std::vector<cmSourceFile const*> objectSources;
+				gt->GetObjectSources(objectSources, "");
+				
+				for (std::vector<cmSourceFile const*>::iterator sourceIter = objectSources.begin();
+					sourceIter != objectSources.end(); ++sourceIter)
+				{
+					cmSourceFile const *srcFile = *sourceIter;
+					std::string sourceFile = srcFile->GetFullPath();
+					context.fout << sourceFile << "\n";
+				}
+				
+				// Get include directories
+				/*
+				for(std::vector<std::string>::iterator i = configs->begin();
+					i != configs->end(); ++i)
+				{
+				std::vector<std::string> includes;
+				this->LocalGenerator->GetIncludeDirectories(includes,
+				this->GeneratorTarget,
+				"C", i->c_str());
+				*/
+				WritePopScope( context );
 			}
 		}
 		
