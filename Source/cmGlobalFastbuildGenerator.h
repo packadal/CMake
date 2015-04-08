@@ -28,6 +28,9 @@ public:
 
   static cmGlobalGeneratorFactory* NewFactory();
 
+  void EnableLanguage(
+	std::vector<std::string>const &  lang,
+    cmMakefile *mf, bool optional);
   virtual void Generate();
   virtual void GenerateBuildCommand(
 	  std::vector<std::string>& makeCommand,
@@ -46,6 +49,8 @@ public:
 private:
 	class Factory;
 	class Detail;
+
+	std::vector<std::string> Configurations;
 };
 
 #endif

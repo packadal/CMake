@@ -76,6 +76,51 @@ public:
 	};
 	typedef std::vector<FastbuildVariable> FastbuildVariables;
 
+	static void GenerateConfigurations( cmGlobalFastbuildGenerator * self,
+		cmMakefile* mf)
+	{
+		// process the configurations
+		const char* configList = 
+			self->CMakeInstance->GetCacheDefinition("CMAKE_CONFIGURATION_TYPES");
+		if (configList)
+		{
+			std::vector<std::string> argsOut;
+			cmSystemTools::ExpandListArgument(configList, argsOut);
+			for (std::vector<std::string>::iterator iter = argsOut.begin();
+				iter != argsOut.end(); ++iter)
+			{
+				if (std::find(self->Configurations.begin(), self->Configurations.end(), *iter) == self->Configurations.end())
+				{
+					self->Configurations.push_back(*iter);
+				}
+			}
+		}
+
+		// default to at least Debug and Release
+		if(self->Configurations.size() == 0)
+		{
+			self->Configurations.push_back("Debug");
+			self->Configurations.push_back("Release");
+		}
+
+		// Reset the entry to have a semi-colon separated list.
+		std::string configs = self->Configurations[0];
+		for(unsigned int i=1; i < self->Configurations.size(); ++i)
+		{
+			configs += ";";
+			configs += self->Configurations[i];
+		}
+
+		// Add a cache definition
+		mf->AddCacheDefinition(
+			"CMAKE_CONFIGURATION_TYPES",
+			configs.c_str(),
+			"Semicolon separated list of supported configuration types, "
+			"only supports Debug, Release, MinSizeRel, and RelWithDebInfo, "
+			"anything else will be ignored.",
+			cmCacheManager::STRING);
+	}
+
 	static void GenerateRootBFF(cmGlobalFastbuildGenerator * self,
 		cmLocalGenerator* root, std::vector<cmLocalGenerator*>& generators)
 	{
@@ -239,20 +284,36 @@ public:
 		WritePopScope( context );
 
 		// Iterate over all configurations and define them:
-		/*
 		for(std::vector<std::string>::iterator iter = context.self->Configurations.begin();
 			iter != context.self->Configurations.end(); ++iter)
 		{
 			std::string & configName = *iter;
-			/*
-			std::vector<std::string
+			WriteVariable( context, "config_" + configName, "");
+			WritePushScopeStruct( context );
 
-			WriteStruct( context, "config-" + configName, 
-				)
-			context.fout << "\t\t" << *i << "|" << this->GetPlatformName()
-			<< " = "  << *i << "|" << this->GetPlatformName() << "\n";
+			// Using base config
+			WriteCommand( context, "Using", ".ConfigBase" );
+
+			WritePopScope( context );
 		}
-		*/
+
+		// Write out a list of all configs
+		WriteVariable( context, "all_configs", "");
+		WritePushScope( context );
+		for(std::vector<std::string>::iterator iter = context.self->Configurations.begin();
+			iter != context.self->Configurations.end(); ++iter)
+		{
+			std::string configName = "config_" + *iter;
+			bool isFirst = iter == context.self->Configurations.begin();
+			
+			context.fout << context.linePrefix;
+			if (!isFirst)
+			{
+				context.fout << ', ';
+			}
+			context.fout << "." << configName << "\n";
+		}
+		WritePopScope( context );
 	}
 
 	static void WriteTargetDefinitions(FastbuildFileContext& context)
@@ -296,9 +357,9 @@ public:
 					context.fout << context.linePrefix;
 					if (!isFirst)
 					{
-						context.fout << ',';
+						context.fout << ', ';
 					}
-					context.fout << sourceFile << "\n";
+					context.fout << "'" << sourceFile << "'\n";
 				}
 				WritePopScope( context );
 				
@@ -312,16 +373,48 @@ public:
 				this->GeneratorTarget,
 				"C", i->c_str());
 				*/
+				
+				// Define compile flags
+				for(std::vector<std::string>::iterator iter = context.self->Configurations.begin();
+					iter != context.self->Configurations.end(); ++iter)
+				{
+					std::string configName = *iter;
+				
+					std::string libflags;
+					lg->GetStaticLibraryFlags(libflags, configName, &target);
+
+					std::string linkLibs;
+					std::string flags;
+					std::string linkFlags;
+					std::string frameworkPath;
+					std::string linkPath;
+
+					lg->GetTargetFlags(
+					  linkLibs,
+                      flags,
+                      linkFlags,
+                      frameworkPath,
+                      linkPath,
+                      gt,
+                      false);
+
+					WriteVariable( context, "LibFlags_" + configName, libflags );
+					WriteVariable( context, "LinkLibs_" + configName, linkLibs);
+					WriteVariable( context, "Flags_" + configName, flags );
+					WriteVariable( context, "LinkFlags_" + configName, linkFlags);
+					WriteVariable( context, "FrameworkPath_" + configName, frameworkPath );
+					WriteVariable( context, "LinkPath_" + configName, linkPath );
+				}
+
 				WritePopScope( context );
 			}
 		}
-		
-
 	}
 
 	static void WriteTargets(FastbuildFileContext& context)
 	{
 		WriteSectionHeader( context, "Targets" );
+
 	}
 
 	static void WriteAliases(FastbuildFileContext& context)
@@ -360,6 +453,16 @@ cmLocalGenerator *cmGlobalFastbuildGenerator::CreateLocalGenerator()
 	cmLocalGenerator * lg = new cmLocalFastbuildGenerator();
 	lg->SetGlobalGenerator(this);
 	return lg;
+}
+
+//----------------------------------------------------------------------------
+void cmGlobalFastbuildGenerator::EnableLanguage(
+	std::vector<std::string>const &  lang,
+    cmMakefile *mf, bool optional)
+{
+  // Create list of configurations requested by user's cache, if any.
+  this->cmGlobalGenerator::EnableLanguage(lang, mf, optional);
+  Detail::GenerateConfigurations( this, mf );
 }
 
 //----------------------------------------------------------------------------
