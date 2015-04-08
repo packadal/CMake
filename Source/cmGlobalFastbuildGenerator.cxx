@@ -401,8 +401,15 @@ public:
 					std::vector<std::string> includes;
 					lg->GetIncludeDirectories(includes,
 						gt, "C", configName);
+					std::string includeFlags = lg->GetIncludeFlags(
+                         includes,
+                         gt,
+                         "C",
+                         false,
+                         false,
+                         configName);
 					
-					WriteArray( context, "includeDirectories", includes, "'", "'" );
+					WriteVariable( context, "IncludeFlags_" + configName, "'" + linkPath + "'" );
 				}
 
 				WritePopScope( context );
