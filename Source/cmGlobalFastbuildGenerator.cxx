@@ -69,13 +69,6 @@ public:
 		std::string closingScope;
 	};
 
-	struct FastbuildVariable
-	{
-		std::string key;
-		std::string value;
-	};
-	typedef std::vector<FastbuildVariable> FastbuildVariables;
-
 	static void GenerateConfigurations( cmGlobalFastbuildGenerator * self,
 		cmMakefile* mf)
 	{
