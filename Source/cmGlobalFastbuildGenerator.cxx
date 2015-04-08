@@ -226,6 +226,27 @@ public:
 		}
 		context.fout << "\n";
 	}
+
+	static void WriteArray( FastbuildFileContext& context, const std::string& key, 
+		const std::vector<std::string>& values, const std::string& prefix, const std::string& suffix )
+	{
+		WriteVariable( context, key, "");
+		WritePushScope( context );
+		int size = values.size();
+		for(int index = 0; index < size; ++index)
+		{
+			const std::string & value = values[index];
+			bool isLast = index == size - 1;
+			
+			context.fout << context.linePrefix << prefix << value << suffix;
+			if (!isLast)
+			{
+				context.fout << ',';
+			}
+			context.fout << "\n";
+		}
+		WritePopScope( context );
+	}
 	
 	static void WriteSettings( FastbuildFileContext& context )
 	{
@@ -233,7 +254,7 @@ public:
 
 		WriteCommand( context, "Settings" );
 		WritePushScope( context );
-		WriteVariable( context, "CachePath", "\"C:\\.fbuild.cache\"");
+		//WriteVariable( context, "CachePath", "\"C:\\.fbuild.cache\"");
 		WritePopScope( context );
 	}
 
@@ -298,22 +319,8 @@ public:
 		}
 
 		// Write out a list of all configs
-		WriteVariable( context, "all_configs", "");
-		WritePushScope( context );
-		for(std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-			iter != context.self->Configurations.end(); ++iter)
-		{
-			std::string configName = "config_" + *iter;
-			bool isFirst = iter == context.self->Configurations.begin();
-			
-			context.fout << context.linePrefix;
-			if (!isFirst)
-			{
-				context.fout << ', ';
-			}
-			context.fout << "." << configName << "\n";
-		}
-		WritePopScope( context );
+		WriteArray( context, "all_configs", context.self->Configurations,
+			".config_", "");
 	}
 
 	static void WriteTargetDefinitions(FastbuildFileContext& context)
@@ -346,22 +353,15 @@ public:
 				std::vector<cmSourceFile const*> objectSources;
 				gt->GetObjectSources(objectSources, "");
 				
-				WriteVariable( context, "CompilerInputFiles", "");
-				WritePushScope( context );
+				std::vector<std::string> sourceFiles;
 				for (std::vector<cmSourceFile const*>::iterator sourceIter = objectSources.begin();
 					sourceIter != objectSources.end(); ++sourceIter)
 				{
-					bool isFirst = sourceIter == objectSources.begin();
 					cmSourceFile const *srcFile = *sourceIter;
 					std::string sourceFile = srcFile->GetFullPath();
-					context.fout << context.linePrefix;
-					if (!isFirst)
-					{
-						context.fout << ', ';
-					}
-					context.fout << "'" << sourceFile << "'\n";
+					sourceFiles.push_back(sourceFile);
 				}
-				WritePopScope( context );
+				WriteArray( context, "CompilerInputFiles", sourceFiles, "'", "'");
 				
 				// Get include directories
 				/*
@@ -398,12 +398,18 @@ public:
                       gt,
                       false);
 
-					WriteVariable( context, "LibFlags_" + configName, libflags );
-					WriteVariable( context, "LinkLibs_" + configName, linkLibs);
-					WriteVariable( context, "Flags_" + configName, flags );
-					WriteVariable( context, "LinkFlags_" + configName, linkFlags);
-					WriteVariable( context, "FrameworkPath_" + configName, frameworkPath );
-					WriteVariable( context, "LinkPath_" + configName, linkPath );
+					WriteVariable( context, "LibFlags_" + configName, "'" + libflags + "'" );
+					WriteVariable( context, "LinkLibs_" + configName, "'" + linkLibs + "'");
+					WriteVariable( context, "Flags_" + configName, "'" + flags + "'" );
+					WriteVariable( context, "LinkFlags_" + configName, "'" + linkFlags + "'");
+					WriteVariable( context, "FrameworkPath_" + configName, "'" + frameworkPath + "'" );
+					WriteVariable( context, "LinkPath_" + configName, "'" + linkPath + "'" );
+
+					std::vector<std::string> includes;
+					lg->GetIncludeDirectories(includes,
+						gt, "C", configName);
+					
+					WriteArray( context, "includeDirectories", includes, "'", "'" );
 				}
 
 				WritePopScope( context );
@@ -420,6 +426,73 @@ public:
 	static void WriteAliases(FastbuildFileContext& context)
 	{
 		WriteSectionHeader( context, "Aliases" );
+
+		// Write the following aliases:
+		// Per Target
+		// Per Config
+		// All
+
+		typedef std::map<std::string, std::vector<std::string>> TargetListMap;
+		TargetListMap perConfig;
+		TargetListMap perTarget;
+
+		// Iterate over each of the targets
+		for (std::vector<cmLocalGenerator*>::iterator iter = context.generators.begin();
+			iter != context.generators.end(); ++iter)
+		{
+			cmLocalGenerator *lg = *iter;
+
+			cmTargets &tgts = lg->GetMakefile()->GetTargets();
+			for(cmTargets::iterator targetIter = tgts.begin(); targetIter != tgts.end(); 
+				++targetIter)
+			{
+				cmTarget &target = targetIter->second;
+				const std::string & targetName = target.GetName();
+				
+				// Define compile flags
+				for(std::vector<std::string>::iterator iter = context.self->Configurations.begin();
+					iter != context.self->Configurations.end(); ++iter)
+				{
+					std::string & configName = *iter;
+					std::string aliasName = targetName + "-" + configName;
+
+					perTarget[targetName].push_back(aliasName);
+					perConfig[configName].push_back(aliasName);
+				}
+			}
+		}
+
+		WriteComment( context, "Per config" );
+		for (TargetListMap::iterator iter = perConfig.begin();
+			iter != perConfig.end(); ++iter)
+		{
+			const std::string & configName = iter->first;
+			const std::vector<std::string> & targets = iter->second;
+
+			WriteCommand( context, "Alias", "'" + configName + "'");
+			WritePushScope( context);
+			WriteArray( context, "Targets", targets, "'", "'" );
+			WritePopScope( context);
+		}
+
+		WriteComment( context, "Per targets" );
+		for (TargetListMap::iterator iter = perTarget.begin();
+			iter != perTarget.end(); ++iter)
+		{
+			const std::string & targetName = iter->first;
+			const std::vector<std::string> & targets = iter->second;
+
+			WriteCommand( context, "Alias", "'" + targetName + "'");
+			WritePushScope( context );
+			WriteArray( context, "Targets", targets, "'", "'" );
+			WritePopScope( context);
+		}
+
+		WriteComment( context, "All" );
+		WriteCommand( context, "Alias", "'All'");
+		WritePushScope( context );
+		WriteArray( context, "Targets", context.self->Configurations , "'", "'" );
+		WritePopScope( context);
 	}
 };
 
