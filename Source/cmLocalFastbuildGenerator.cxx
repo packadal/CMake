@@ -42,3 +42,10 @@ void cmLocalFastbuildGenerator::Generate()
 }
 
 //----------------------------------------------------------------------------
+void cmLocalFastbuildGenerator::ExpandRuleVariables(std::string& s, 
+	const RuleVariables& replaceValues)
+{
+	return cmLocalGenerator::ExpandRuleVariables( s, replaceValues );
+}
+
+//----------------------------------------------------------------------------

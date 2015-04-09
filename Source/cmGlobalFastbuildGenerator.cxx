@@ -203,10 +203,11 @@ public:
 		context.closingScope.resize( context.closingScope.size() - 1 );
 	}
 
-	static void WriteVariable( FastbuildFileContext& context, const std::string& key, const std::string& value )
+	static void WriteVariable( FastbuildFileContext& context, const std::string& key, const std::string& value,
+		const std::string& operation = "=")
 	{
 		context.fout << context.linePrefix << "." <<
-			key << " = " << value << "\n";
+			key << " " << operation << " " << value << "\n";
 	}
 
 	static void WriteCommand( FastbuildFileContext& context, const std::string& command, const std::string& value = std::string())
@@ -316,9 +317,252 @@ public:
 			".config_", "");
 	}
 
+	static void WriteTargetDefinition(FastbuildFileContext& context,
+		cmLocalFastbuildGenerator *lg, cmTarget &target )
+	{
+		if(target.GetType() == cmTarget::INTERFACE_LIBRARY)
+		{
+			return;
+		}
+		
+		std::string targetName = target.GetName();
+		
+		WriteVariable( context, "TargetDef_" + targetName, "" );
+		WritePushScopeStruct( context );
+
+		cmGeneratorTarget *gt = context.self->GetGeneratorTarget(&target);
+		// get a list of source files
+		std::vector<cmSourceFile const*> objectSources;
+		gt->GetObjectSources(objectSources, "");
+		
+		std::vector<std::string> sourceFiles;
+		for (std::vector<cmSourceFile const*>::iterator sourceIter = objectSources.begin();
+			sourceIter != objectSources.end(); ++sourceIter)
+		{
+			cmSourceFile const *srcFile = *sourceIter;
+			std::string sourceFile = srcFile->GetFullPath();
+			sourceFiles.push_back(sourceFile);
+		}
+		WriteArray( context, "CompilerInputFiles", sourceFiles, "'", "'");
+
+		// Write the dependencies of this target
+		WriteArray( context, "PreBuildDependencies", std::vector<std::string>(), "'", "'" );
+		WriteArray( context, "Libraries", std::vector<std::string>(), "'", "'" );
+
+		// Write the basic compiler options
+		{
+			std::string language = "C";
+
+			cmLocalGenerator::RuleVariables compileObjectVars;
+			compileObjectVars.CMTarget = &target;
+			compileObjectVars.Language = language.c_str();
+			compileObjectVars.Source = "%1";
+			compileObjectVars.Object = "%2";
+			compileObjectVars.ObjectDir = "";
+			compileObjectVars.ObjectFileDir = "";
+			compileObjectVars.Flags = "";
+			compileObjectVars.Defines = "";
+
+			// Rule for compiling object file.
+			std::string compileCmdVar = "CMAKE_";
+			compileCmdVar += language;
+			compileCmdVar += "_COMPILE_OBJECT";
+			std::string compileCmd = lg->GetMakefile()->GetRequiredDefinition(compileCmdVar);
+			std::vector<std::string> compileCmds;
+			cmSystemTools::ExpandListArgument(compileCmd, compileCmds);
+
+			for (std::vector<std::string>::iterator i = compileCmds.begin();
+				i != compileCmds.end(); ++i)
+			{
+				std::string & compileCmd = *i;
+				lg->ExpandRuleVariables(compileCmd, compileObjectVars);
+
+				// Remove the command from the front
+				std::vector<std::string> args = cmSystemTools::ParseArguments(compileCmd.c_str());
+				
+				// Join the args together and remove 0 from the front
+				std::stringstream argSet;
+				std::copy(args.begin() + 1,args.end(), std::ostream_iterator<std::string>(argSet, " "));
+				compileCmd = argSet.str();
+			}
+			
+			// Remove the command from the front and leave the flags behind
+			WriteVariable( context, "CompilerOptions", "'" + compileCmds[0] + "'");
+		}
+
+		// Define compile flags
+		for(std::vector<std::string>::iterator iter = context.self->Configurations.begin();
+			iter != context.self->Configurations.end(); ++iter)
+		{
+			std::string configName = *iter;
+			WriteVariable( context, configName + "Config", "" );
+			WritePushScopeStruct( context );
+
+			WriteCommand( context, "Using", ".ConfigBase" );
+		
+			std::string libflags;
+			lg->GetStaticLibraryFlags(libflags, configName, &target);
+
+			std::string linkLibs;
+			std::string flags;
+			std::string linkFlags;
+			std::string frameworkPath;
+			std::string linkPath;
+
+			lg->GetTargetFlags(
+			  linkLibs,
+              flags,
+              linkFlags,
+              frameworkPath,
+              linkPath,
+              gt,
+              false);
+
+			WriteVariable( context, "LibFlags", "'" + libflags + "'" );
+			WriteVariable( context, "LinkLibs", "'" + linkLibs + "'");
+			WriteVariable( context, "CompilerFlags", "'" + flags + "'" );
+			WriteVariable( context, "LinkFlags", "'" + linkFlags + "'");
+			WriteVariable( context, "FrameworkPath", "'" + frameworkPath + "'" );
+			WriteVariable( context, "LinkPath", "'" + linkPath + "'" );
+
+			std::vector<std::string> includes;
+			lg->GetIncludeDirectories(includes,
+				gt, "C", configName);
+			std::string includeFlags = lg->GetIncludeFlags(
+                 includes,
+                 gt,
+                 "C",
+                 false,
+                 false,
+                 configName);
+			
+			WriteVariable( context, "IncludeFlags", "'" + linkPath + "'" );
+
+			std::string compilerOutputPath = targetName + "/" + configName + "/";
+			std::string librarianOutput = compilerOutputPath + targetName + ".lib";
+			std::string linkerOutput = compilerOutputPath + targetName + ".exe";
+			cmSystemTools::ConvertToOutputSlashes( compilerOutputPath );
+			cmSystemTools::ConvertToOutputSlashes( librarianOutput );
+			cmSystemTools::ConvertToOutputSlashes( linkerOutput );
+
+			// Tie together the variables
+			WriteVariable( context, "CompilerOptions", "'$CompilerFlags$ $IncludeFlags$'", "+" );
+			WriteVariable( context, "CompilerOutputPath", "'" + compilerOutputPath + "'" );
+			WriteVariable( context, "LibrarianOutput", "'" + librarianOutput + "'" );
+			WriteVariable( context, "LinkerOutput", "'" + linkerOutput + "'" );
+			WriteVariable( context, "LinkerOptions", "'$LinkFlags$'" );
+
+			WritePopScope( context );
+		}
+
+		WritePopScope( context );
+	}
+
 	static void WriteTargetDefinitions(FastbuildFileContext& context)
 	{
 		WriteSectionHeader( context, "Target Definitions" );
+
+		// Iterate over each of the targets
+		for (std::vector<cmLocalGenerator*>::iterator iter = context.generators.begin();
+			iter != context.generators.end(); ++iter)
+		{
+			cmLocalFastbuildGenerator *lg = static_cast<cmLocalFastbuildGenerator*>(*iter);
+
+			cmTargets &tgts = lg->GetMakefile()->GetTargets();
+			for(cmTargets::iterator targetIter = tgts.begin(); targetIter != tgts.end(); 
+				++targetIter)
+			{
+				cmTarget &target = targetIter->second;
+				WriteTargetDefinition( context, lg, target );
+			}
+		}
+	}
+
+	static void WriteTarget(FastbuildFileContext& context,
+		cmLocalGenerator *lg, cmTarget &target, const std::string& configName )
+	{
+		std::string targetName = target.GetName();
+
+		// Select command type to use
+		std::string commandNameA = "Library";
+		std::string commandNameB = "";
+		std::string targetNameBase = targetName + "-" + configName;
+		std::string targetNameA = targetNameBase;
+		std::string targetNameB = targetNameBase;
+
+		switch( target.GetType() )
+		{
+			case cmTarget::EXECUTABLE:
+			{
+				commandNameA = "ObjectList";
+				commandNameB = "Executable";
+				targetNameA += "-" + commandNameA;
+				targetNameB += "-" + commandNameB;
+				break;
+			} 
+			case cmTarget::SHARED_LIBRARY:
+			{
+				commandNameA = "ObjectList";
+				commandNameB = "DLL";
+				targetNameA += "-" + commandNameA;
+				targetNameB += "-" + commandNameB;
+				break;
+			}
+			case cmTarget::STATIC_LIBRARY:
+			case cmTarget::MODULE_LIBRARY:
+            case cmTarget::OBJECT_LIBRARY:
+			{
+				// No changes required
+				break;
+			} 
+			case cmTarget::UTILITY:
+			case cmTarget::GLOBAL_TARGET:
+			case cmTarget::INTERFACE_LIBRARY:
+			case cmTarget::UNKNOWN_LIBRARY:
+			{
+				// Ignoring this target generation...
+				// Still generate a valid target by the name,
+				// but don't make it do anything
+				commandNameA = "Alias";
+				return;
+			}
+		}
+
+		// Write fastbuild target definition 
+		WriteCommand( context, commandNameA, "'" + targetNameA + "'" );
+		WritePushScope( context );
+		
+		WriteCommand( context, "Using", ".TargetDef_" + targetName );
+		WriteCommand( context, "Using", "." + configName + "Config" );
+
+		WritePopScope( context );
+
+		// Write the second target definition
+		if (!commandNameB.empty())
+		{
+			WriteCommand( context, commandNameB, "'" + targetNameB + "'" );
+			WritePushScope( context );
+			
+			WriteCommand( context, "Using", ".TargetDef_" + targetName );
+			WriteCommand( context, "Using", "." + configName + "Config" );
+
+			std::vector<std::string> deps;
+			deps.push_back(targetNameA);
+			WriteArray( context, "PreBuildDependencies", deps , "'", "'" );
+			WriteArray( context, "Libraries", deps, "'", "'" );
+
+			WritePopScope( context );
+
+			WriteCommand( context, "Alias", "'" + targetNameBase + "'" );
+			WritePushScope( context );
+			WriteVariable( context, "Targets", "{ '" + targetNameA + "', '" + targetNameB + "' }" );
+			WritePopScope( context );
+		}
+	}
+
+	static void WriteTargets(FastbuildFileContext& context)
+	{
+		WriteSectionHeader( context, "Targets" );
 
 		// Iterate over each of the targets
 		for (std::vector<cmLocalGenerator*>::iterator iter = context.generators.begin();
@@ -331,96 +575,15 @@ public:
 				++targetIter)
 			{
 				cmTarget &target = targetIter->second;
-				if(target.GetType() == cmTarget::INTERFACE_LIBRARY)
-				{
-					continue;
-				}
-				
-				std::string targetName = "TargetDef_" + target.GetName();
-				
-				WriteVariable( context, targetName, "" );
-				WritePushScopeStruct( context );
-
-				cmGeneratorTarget *gt = context.self->GetGeneratorTarget(&target);
-				// get a list of source files
-				std::vector<cmSourceFile const*> objectSources;
-				gt->GetObjectSources(objectSources, "");
-				
-				std::vector<std::string> sourceFiles;
-				for (std::vector<cmSourceFile const*>::iterator sourceIter = objectSources.begin();
-					sourceIter != objectSources.end(); ++sourceIter)
-				{
-					cmSourceFile const *srcFile = *sourceIter;
-					std::string sourceFile = srcFile->GetFullPath();
-					sourceFiles.push_back(sourceFile);
-				}
-				WriteArray( context, "CompilerInputFiles", sourceFiles, "'", "'");
-				
-				// Get include directories
-				/*
-				for(std::vector<std::string>::iterator i = configs->begin();
-					i != configs->end(); ++i)
-				{
-				std::vector<std::string> includes;
-				this->LocalGenerator->GetIncludeDirectories(includes,
-				this->GeneratorTarget,
-				"C", i->c_str());
-				*/
-				
-				// Define compile flags
 				for(std::vector<std::string>::iterator iter = context.self->Configurations.begin();
 					iter != context.self->Configurations.end(); ++iter)
 				{
-					std::string configName = *iter;
-				
-					std::string libflags;
-					lg->GetStaticLibraryFlags(libflags, configName, &target);
+					std::string &configName = *iter;
 
-					std::string linkLibs;
-					std::string flags;
-					std::string linkFlags;
-					std::string frameworkPath;
-					std::string linkPath;
-
-					lg->GetTargetFlags(
-					  linkLibs,
-                      flags,
-                      linkFlags,
-                      frameworkPath,
-                      linkPath,
-                      gt,
-                      false);
-
-					WriteVariable( context, "LibFlags_" + configName, "'" + libflags + "'" );
-					WriteVariable( context, "LinkLibs_" + configName, "'" + linkLibs + "'");
-					WriteVariable( context, "Flags_" + configName, "'" + flags + "'" );
-					WriteVariable( context, "LinkFlags_" + configName, "'" + linkFlags + "'");
-					WriteVariable( context, "FrameworkPath_" + configName, "'" + frameworkPath + "'" );
-					WriteVariable( context, "LinkPath_" + configName, "'" + linkPath + "'" );
-
-					std::vector<std::string> includes;
-					lg->GetIncludeDirectories(includes,
-						gt, "C", configName);
-					std::string includeFlags = lg->GetIncludeFlags(
-                         includes,
-                         gt,
-                         "C",
-                         false,
-                         false,
-                         configName);
-					
-					WriteVariable( context, "IncludeFlags_" + configName, "'" + linkPath + "'" );
+					WriteTarget( context, lg, target, configName );
 				}
-
-				WritePopScope( context );
 			}
 		}
-	}
-
-	static void WriteTargets(FastbuildFileContext& context)
-	{
-		WriteSectionHeader( context, "Targets" );
-
 	}
 
 	static void WriteAliases(FastbuildFileContext& context)

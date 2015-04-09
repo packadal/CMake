@@ -37,6 +37,7 @@ public:
 
 	virtual void Generate();
 
+	void ExpandRuleVariables(std::string& s, const RuleVariables& replaceValues);
 };
 
 #endif
