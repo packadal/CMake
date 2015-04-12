@@ -442,6 +442,7 @@ public:
 		compileObjectVars.ObjectFileDir = "";
 		compileObjectVars.Flags = "";
 		compileObjectVars.Defines = "";
+		compileObjectVars.TargetCompilePDB = "$TargetNamePDB$";
 
 		// Rule for compiling object file.
 		std::string compileCmdVar = "CMAKE_";
@@ -769,29 +770,7 @@ public:
 			context.fc.WriteVariable(ruleObjectGroupName, "");
 			context.fc.WritePushScopeStruct();
 
-			// Compiler options
-			{
-				// Remove the command from the front and leave the flags behind
-				std::string compileCmd;
-				Detection::DetectBaseCompileCommand(compileCmd,
-					lg, target, objectGroupLanguage);
-
-				std::string executable;
-				std::string flags;
-				Detection::SplitExecutableAndFlags(compileCmd, executable, flags);
-
-				// Define the compiler
-				std::string compilerName = "Compiler-" + targetName + "-" + ruleObjectGroupName;
-				context.fc.WriteCommand("Compiler", Quote(compilerName));
-				context.fc.WritePushScope();
-				context.fc.WriteVariable("Executable", Quote(executable));
-				context.fc.WritePopScope();
-
-				context.fc.WriteVariable("Compiler", Quote(compilerName));
-				context.fc.WriteVariable("BaseCompilerOptions", Quote(flags));
-			}
-
-			// Define compile flags
+			// Iterating over all configurations
 			for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
 				iter != context.self->Configurations.end(); ++iter)
 			{
@@ -800,6 +779,32 @@ public:
 				context.fc.WritePushScopeStruct();
 
 				context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
+
+				// Compiler options
+				{
+					// Remove the command from the front and leave the flags behind
+					std::string compileCmd;
+					Detection::DetectBaseCompileCommand(compileCmd,
+						lg, target, objectGroupLanguage);
+
+					std::string executable;
+					std::string flags;
+					Detection::SplitExecutableAndFlags(compileCmd, executable, flags);
+
+					// Define the compiler
+					/*
+					std::string compilerName = "Compiler-" + targetName + "-" + ruleObjectGroupName + "-" + configName;
+					context.fc.WriteCommand("Compiler", Quote(compilerName));
+					context.fc.WritePushScope();
+					context.fc.WriteVariable("Executable", Quote(executable));
+					context.fc.WritePopScope();
+
+					context.fc.WriteVariable("Compiler", Quote(compilerName));
+					*/
+					
+					context.fc.WriteVariable("Compiler", "'Compiler-default'");
+					context.fc.WriteVariable("BaseCompilerOptions", Quote(flags));
+				}
 
 				// Source files
 				context.fc.WriteBlankLine();
