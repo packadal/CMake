@@ -623,8 +623,6 @@ public:
 		context.fc.WriteVariable("ConfigBase", "");
 		context.fc.WritePushScopeStruct();
 		context.fc.WriteVariable("Compiler", "'Compiler-default'");
-		context.fc.WriteVariable("Librarian", "'$CompilerRoot$\\lib.exe'");
-		context.fc.WriteVariable("Linker", "'$CompilerRoot$\\link.exe'");
 		context.fc.WritePopScope();
 
 		// Iterate over all configurations and define them:
@@ -773,11 +771,11 @@ public:
 
 					std::vector<std::string> includes;
 					lg->GetIncludeDirectories(includes,
-						gt, "C", configName);
+						gt, "CXX", configName);
 					std::string includeFlags = lg->GetIncludeFlags(
 						includes,
 						gt,
-						"C",
+						"CXX",
 						false,
 						false,
 						configName);
