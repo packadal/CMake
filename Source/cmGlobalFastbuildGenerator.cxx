@@ -655,13 +655,20 @@ public:
 		std::string targetName = target.GetName();
 		cmGeneratorTarget *gt = context.self->GetGeneratorTarget(&target);
 
-		context.fc.WriteVariable("TargetDef_" + targetName, "");
+		std::string ruleTargetName = "TargetDef_" + targetName;
+		context.fc.WriteVariable(ruleTargetName, "");
 		context.fc.WritePushScopeStruct();
+
+		std::vector<std::string> objectGroups;
 
 		// Write the object list definitions for each language
 		// stored in this target
 		{
-			context.fc.WriteVariable("ObjectListDef_A", "");
+			std::string ruleObjectGroupName = "ObjectGroupDef_A";
+			std::string objectGroupLanguage = target.GetLinkerLanguage();
+			objectGroups.push_back(ruleObjectGroupName);
+
+			context.fc.WriteVariable(ruleObjectGroupName, "");
 			context.fc.WritePushScopeStruct();
 
 			// Compiler options
@@ -669,13 +676,21 @@ public:
 				// Remove the command from the front and leave the flags behind
 				std::string compileCmd;
 				Detection::DetectBaseCompileCommand(compileCmd,
-					lg, target, "C");
+					lg, target, objectGroupLanguage);
 
 				std::string executable;
 				std::string flags;
 				Detection::SplitExecutableAndFlags(compileCmd, executable, flags);
 
-				context.fc.WriteVariable("BaseCompilerOptions", "'" + flags + "'");
+				// Define the compiler
+				std::string compilerName = "Compiler-" + targetName + "-" + ruleObjectGroupName;
+				context.fc.WriteCommand("Compiler", Quote(compilerName));
+				context.fc.WritePushScope();
+				context.fc.WriteVariable("Executable", Quote(executable));
+				context.fc.WritePopScope();
+
+				context.fc.WriteVariable("Compiler", Quote(compilerName));
+				context.fc.WriteVariable("BaseCompilerOptions", Quote(flags));
 			}
 
 			// Source files
@@ -771,11 +786,11 @@ public:
 
 					std::vector<std::string> includes;
 					lg->GetIncludeDirectories(includes,
-						gt, "CXX", configName);
+						gt, objectGroupLanguage, configName);
 					std::string includeFlags = lg->GetIncludeFlags(
 						includes,
 						gt,
-						"CXX",
+						objectGroupLanguage,
 						false,
 						false,
 						configName);
@@ -814,7 +829,7 @@ public:
 		context.fc.WritePopScope();
 
 		// Output the list of all objectList definitions
-		context.fc.WriteVariable("ObjectListDefs", "{'ObjectListDef_A'}");
+		context.fc.WriteArray("ObjectGroups", objectGroups, ".", "");
 
 		context.fc.WritePopScope();
 	}
@@ -892,7 +907,7 @@ public:
 		context.fc.WritePushScope();
 
 		context.fc.WriteCommand("Using", ".TargetDef_" + targetName);
-		context.fc.WriteCommand("Using", ".ObjectListDef_A");
+		context.fc.WriteCommand("Using", ".ObjectGroupDef_A");
 		context.fc.WriteCommand("Using", "." + configName + "Config");
 
 		context.fc.WritePopScope();
@@ -902,7 +917,7 @@ public:
 		context.fc.WritePushScope();
 
 		context.fc.WriteCommand("Using", ".TargetDef_" + targetName);
-		context.fc.WriteCommand("Using", ".ObjectListDef_A");
+		context.fc.WriteCommand("Using", ".ObjectGroupDef_A");
 		context.fc.WriteCommand("Using", "." + configName + "Config");
 
 		context.fc.WriteArray("PreBuildDependencies", deps, "'", "'");
