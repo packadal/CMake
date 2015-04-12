@@ -398,8 +398,9 @@ public:
 		vars.TargetVersionMajor = targetVersionMajor.c_str();
 		vars.TargetVersionMinor = targetVersionMinor.c_str();
 
-		vars.Flags = "";
-		vars.LinkFlags = "";
+		vars.Defines = "$CompileDefineFlags$";
+		vars.Flags = "$CompileFlags$";
+		vars.LinkFlags = "$LinkFlags$";
 
 		// Rule for linking library/executable.
 		std::vector<std::string> linkCmds;
@@ -499,6 +500,58 @@ public:
 				filteredSourceFiles.push_back(sf);
 			}
 		}
+	}
+
+	static void DetectCompilerFlags(std::string & compileFlags,
+		cmLocalFastbuildGenerator *lg,
+		cmGeneratorTarget *gt,
+		cmTarget &target,
+		const std::string& language,
+		const std::string& configName)
+	{
+		lg->AddLanguageFlags(compileFlags, 
+			language, 
+			configName);
+
+		lg->AddArchitectureFlags(compileFlags,
+			gt,
+			language,
+			configName);
+
+		// Add shared-library flags if needed.
+		lg->AddCMP0018Flags(compileFlags, 
+			&target,
+			language,
+			configName);
+
+		lg->AddVisibilityPresetFlags(compileFlags, &target,
+			language);
+
+		std::vector<std::string> includes;
+		lg->GetIncludeDirectories(includes,
+			gt,
+			language,
+			configName);
+
+		// Add include directory flags.
+		std::string includeFlags = lg->GetIncludeFlags(includes, gt,
+			language,
+			language == "RC" ? true : false,  // full include paths for RC
+			// needed by cmcldeps
+			false,
+			configName);
+		
+		lg->AppendFlags(compileFlags, includeFlags);
+
+		// Append old-style preprocessor definition flags.
+		lg->AppendFlags(compileFlags,
+			lg->GetMakefile()->GetDefineFlags());
+
+		// Add target-specific flags.
+		lg->AddCompileOptions(compileFlags, 
+			&target,
+			language,
+			configName);
 	}
 
 private:
@@ -780,32 +833,6 @@ public:
 
 				context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
 
-				// Compiler options
-				{
-					// Remove the command from the front and leave the flags behind
-					std::string compileCmd;
-					Detection::DetectBaseCompileCommand(compileCmd,
-						lg, target, objectGroupLanguage);
-
-					std::string executable;
-					std::string flags;
-					Detection::SplitExecutableAndFlags(compileCmd, executable, flags);
-
-					// Define the compiler
-					/*
-					std::string compilerName = "Compiler-" + targetName + "-" + ruleObjectGroupName + "-" + configName;
-					context.fc.WriteCommand("Compiler", Quote(compilerName));
-					context.fc.WritePushScope();
-					context.fc.WriteVariable("Executable", Quote(executable));
-					context.fc.WritePopScope();
-
-					context.fc.WriteVariable("Compiler", Quote(compilerName));
-					*/
-					
-					context.fc.WriteVariable("Compiler", "'Compiler-default'");
-					context.fc.WriteVariable("BaseCompilerOptions", Quote(flags));
-				}
-
 				// Source files
 				context.fc.WriteBlankLine();
 				context.fc.WriteComment("Source files:");
@@ -855,10 +882,11 @@ public:
 
 					context.fc.WriteVariable("LibFlags", "'" + libflags + "'");
 					context.fc.WriteVariable("LinkLibs", "'" + linkLibs + "'");
-					context.fc.WriteVariable("CompilerFlags", "'" + flags + "'");
+					context.fc.WriteVariable("CompileFlags", "'" + flags + "'");
 					context.fc.WriteVariable("LinkFlags", "'" + linkFlags + "'");
 					context.fc.WriteVariable("FrameworkPath", "'" + frameworkPath + "'");
 					context.fc.WriteVariable("LinkPath", "'" + linkPath + "'");
+					context.fc.WriteVariable("CompileDefineFlags", "'" + std::string() + "'");
 
 					std::vector<std::string> includes;
 					lg->GetIncludeDirectories(includes,
@@ -871,12 +899,43 @@ public:
 						false,
 						configName);
 
+					std::string compilerFlags;
+					Detection::DetectCompilerFlags(compilerFlags, 
+						lg, gt, target, objectGroupLanguage, configName);
+					context.fc.WriteVariable("CompileFlags", "'" + compilerFlags + "'");
+
 					context.fc.WriteVariable("IncludeFlags", "'" + linkPath + "'");
 
 					// Tie together the variables
-					context.fc.WriteVariable("CompilerOptions", "'$BaseCompilerOptions$ $CompilerFlags$ $IncludeFlags$'");
 					context.fc.WriteVariable("CompilerOutputPath", "'$TargetOutDir$'");
 				}
+
+				// Compiler options
+				{
+					// Remove the command from the front and leave the flags behind
+					std::string compileCmd;
+					Detection::DetectBaseCompileCommand(compileCmd,
+						lg, target, objectGroupLanguage);
+
+					std::string executable;
+					std::string flags;
+					Detection::SplitExecutableAndFlags(compileCmd, executable, flags);
+
+					// Define the compiler
+					/*
+					std::string compilerName = "Compiler-" + targetName + "-" + ruleObjectGroupName + "-" + configName;
+					context.fc.WriteCommand("Compiler", Quote(compilerName));
+					context.fc.WritePushScope();
+					context.fc.WriteVariable("Executable", Quote(executable));
+					context.fc.WritePopScope();
+
+					context.fc.WriteVariable("Compiler", Quote(compilerName));
+					*/
+					
+					context.fc.WriteVariable("Compiler", "'Compiler-default'");
+					context.fc.WriteVariable("CompilerOptions", Quote(flags));
+				}
+
 
 				std::string objectGroupRuleName = targetName + "-" + ruleObjectGroupName + "-" + configName;
 				context.fc.WriteCommand("ObjectList", Quote(objectGroupRuleName));
