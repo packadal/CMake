@@ -35,8 +35,8 @@ cmLocalFastbuildGenerator::~cmLocalFastbuildGenerator()
 void cmLocalFastbuildGenerator::Generate()
 {
 	// Debug messages
-	std::cout << "======== LOCAL Fastbuild Gen ========\n";
-	GetMakefile()->Print();
+	//std::cout << "======== LOCAL Fastbuild Gen ========\n";
+	//GetMakefile()->Print();
 
 	// Now generate information for this generator
 }
