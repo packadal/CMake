@@ -356,6 +356,42 @@ public:
 		return;
 	}
 
+	static std::string ComputeDefines(
+		cmLocalFastbuildGenerator *lg,
+		cmTarget &target,
+		const std::string& configName,
+		const std::string& language)
+	{
+		std::set<std::string> defines;
+
+		// Add the export symbol definition for shared library objects.
+		if(const char* exportMacro = target.GetExportMacro())
+		{
+			lg->AppendDefines(defines, exportMacro);
+		}
+
+		// Add preprocessor definitions for this target and configuration.
+		lg->AddCompileDefinitions(defines, &target,
+			configName, language);
+
+		/*
+		lg->AppendDefines(defines,
+			source->GetProperty("COMPILE_DEFINITIONS"));
+		{
+			std::string defPropName = "COMPILE_DEFINITIONS_";
+			defPropName += cmSystemTools::UpperCase(configName);
+			lg->AppendDefines(defines,
+				source->GetProperty(defPropName));
+		}
+		*/
+
+		std::string definesString;
+		lg->JoinDefines(defines, definesString,
+			language);
+
+		return definesString;
+	}
+
 	static void DetectBaseLinkerCommand(std::string & command,
 		cmLocalFastbuildGenerator *lg,
 		cmTarget &target,
@@ -879,14 +915,17 @@ public:
 						linkPath,
 						gt,
 						false);
-
+					
+					std::string compileDefines = 
+						Detection::ComputeDefines(lg, target, configName, objectGroupLanguage);
+					
 					context.fc.WriteVariable("LibFlags", "'" + libflags + "'");
 					context.fc.WriteVariable("LinkLibs", "'" + linkLibs + "'");
 					context.fc.WriteVariable("CompileFlags", "'" + flags + "'");
 					context.fc.WriteVariable("LinkFlags", "'" + linkFlags + "'");
 					context.fc.WriteVariable("FrameworkPath", "'" + frameworkPath + "'");
 					context.fc.WriteVariable("LinkPath", "'" + linkPath + "'");
-					context.fc.WriteVariable("CompileDefineFlags", "'" + std::string() + "'");
+					context.fc.WriteVariable("CompileDefineFlags", "'" + compileDefines + "'");
 
 					std::vector<std::string> includes;
 					lg->GetIncludeDirectories(includes,
@@ -933,7 +972,7 @@ public:
 					*/
 					
 					context.fc.WriteVariable("Compiler", "'Compiler-default'");
-					context.fc.WriteVariable("CompilerOptions", Quote(flags));
+					context.fc.WriteVariable("CompilerOptions", Quote(flags + " $CompileFlags$ $CompileDefineFlags$"));
 				}
 
 
@@ -964,6 +1003,32 @@ public:
 			context.fc.WriteComment("Linker options:");
 			// Linker options
 			{
+				std::string libflags;
+				lg->GetStaticLibraryFlags(libflags, configName, &target);
+
+				std::string linkLibs;
+				std::string targetFlags;
+				std::string linkFlags;
+				std::string frameworkPath;
+				std::string linkPath;
+
+				lg->GetTargetFlags(
+					linkLibs,
+					targetFlags,
+					linkFlags,
+					frameworkPath,
+					linkPath,
+					gt,
+					false);
+
+				context.fc.WriteVariable("LibFlags", "'" + libflags + "'");
+				context.fc.WriteVariable("LinkLibs", "'" + linkLibs + "'");
+				context.fc.WriteVariable("TargetFlags", "'" + targetFlags + "'");
+				context.fc.WriteVariable("LinkFlags", "'" + linkFlags + "'");
+				context.fc.WriteVariable("FrameworkPath", "'" + frameworkPath + "'");
+				context.fc.WriteVariable("LinkPath", "'" + linkPath + "'");
+				context.fc.WriteVariable("CompileDefineFlags", "'" + std::string() + "'");
+
 				// Remove the command from the front and leave the flags behind
 				std::string linkCmd;
 				Detection::DetectBaseLinkerCommand(linkCmd,
