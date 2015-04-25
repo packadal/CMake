@@ -1082,7 +1082,7 @@ public:
 
 				context.fc.WriteVariable("LibrarianOutput", "'$TargetOutDir$$TargetNameOut$'");
 				context.fc.WriteVariable("LinkerOutput", "'$TargetOutDir$$TargetNameOut$'");
-				context.fc.WriteVariable("LinkerOptions", "'$BaseLinkerOptions$'");
+				context.fc.WriteVariable("LinkerOptions", "'$BaseLinkerOptions$ $LinkLibs$'");
 
 				context.fc.WriteArray("Libraries", objectGroups, "'" + targetName + "-", "-" + configName + "'");
 
@@ -1421,6 +1421,7 @@ void cmGlobalFastbuildGenerator::GenerateBuildCommand(
 	makeCommand.push_back(projectName + ".bff");
 
 	makeCommand.push_back("-showcmds");
+	makeCommand.push_back("-ide");
 
 	// Add the target-config to the command
 	if (!targetSelected.empty())
