@@ -499,6 +499,43 @@ public:
 		command = BuildCommandLine(compileCmds);
 	}
 
+	static std::string DetectCompileRule(cmLocalFastbuildGenerator *lg,
+		cmTarget &target,
+		const std::string& lang)
+	{
+		cmLocalGenerator::RuleVariables vars;
+		vars.RuleLauncher = "RULE_LAUNCH_COMPILE";
+		vars.CMTarget = &target;
+		vars.Language = lang.c_str();
+		vars.Source = "$in";
+		vars.Object = "$out";
+		vars.Defines = "$DEFINES";
+		vars.TargetPDB = "$TARGET_PDB";
+		vars.TargetCompilePDB = "$TARGET_COMPILE_PDB";
+		vars.ObjectDir = "$OBJECT_DIR";
+		vars.ObjectFileDir = "$OBJECT_FILE_DIR";
+		vars.Flags = "$FLAGS";
+
+		cmMakefile* mf = lg->GetMakefile();
+
+		// Rule for compiling object file.
+		const std::string cmdVar = std::string("CMAKE_") + lang + "_COMPILE_OBJECT";
+		std::string compileCmd = mf->GetRequiredDefinition(cmdVar);
+		std::vector<std::string> compileCmds;
+		cmSystemTools::ExpandListArgument(compileCmd, compileCmds);
+
+		for (std::vector<std::string>::iterator i = compileCmds.begin();
+			i != compileCmds.end(); ++i)
+		{
+			lg->ExpandRuleVariables(*i, vars);
+		}
+
+		std::string cmdLine =
+			BuildCommandLine(compileCmds);
+
+		return cmdLine;
+	}
+
 	static void DetectLanguages(std::set<std::string> & languages,
 		cmGlobalFastbuildGenerator * self,
 		cmLocalFastbuildGenerator *lg,
@@ -724,8 +761,8 @@ public:
 
 		// Calculate the root location of the compiler
 		std::string cxxCompilerLocation = mf->GetDefinition("CMAKE_CXX_COMPILER") ?
-            mf->GetSafeDefinition("CMAKE_CXX_COMPILER") :
-            mf->GetSafeDefinition("CMAKE_C_COMPILER");
+			mf->GetSafeDefinition("CMAKE_CXX_COMPILER") :
+			mf->GetSafeDefinition("CMAKE_C_COMPILER");
 		if (cxxCompilerLocation.empty())
 		{
 			return false;
@@ -825,8 +862,7 @@ public:
 				context.fc.WriteVariable("TargetNameSO", Quote(targetNames.targetNameSO));
 				context.fc.WriteVariable("TargetNameReal", Quote(targetNames.targetNameReal));
 
-				std::string targetOutDir = target.GetDirectory(configName) +
-					"/" + targetName + "/" + configName + "/";
+				std::string targetOutDir = target.GetDirectory(configName) + "/" + configName + "/";
 				cmSystemTools::ConvertToOutputSlashes(targetOutDir);
 
 				context.fc.WriteVariable("TargetOutDir", Quote(targetOutDir));
@@ -941,12 +977,15 @@ public:
 					std::string compilerFlags;
 					Detection::DetectCompilerFlags(compilerFlags, 
 						lg, gt, target, objectGroupLanguage, configName);
-					context.fc.WriteVariable("CompileFlags", "'" + compilerFlags + "'");
+					context.fc.WriteVariable("CompileFlags", Quote( compilerFlags ));
 
-					context.fc.WriteVariable("IncludeFlags", "'" + linkPath + "'");
+					context.fc.WriteVariable("IncludeFlags", Quote( linkPath ));
 
 					// Tie together the variables
 					context.fc.WriteVariable("CompilerOutputPath", "'$TargetOutDir$'");
+
+					std::string compileObjectCmd = Detection::DetectCompileRule(lg, target, objectGroupLanguage);
+					//context.fc.WriteVariable("CompilerRuleCmd", Quote( compileObjectCmd ));
 				}
 
 				// Compiler options
@@ -1312,7 +1351,7 @@ cmLocalGenerator *cmGlobalFastbuildGenerator::CreateLocalGenerator()
 //----------------------------------------------------------------------------
 void cmGlobalFastbuildGenerator::EnableLanguage(
 	std::vector<std::string>const &  lang,
-    cmMakefile *mf, bool optional)
+	cmMakefile *mf, bool optional)
 {
   // Create list of configurations requested by user's cache, if any.
   this->cmGlobalGenerator::EnableLanguage(lang, mf, optional);
@@ -1330,7 +1369,7 @@ void cmGlobalFastbuildGenerator::Generate()
 	for(it = this->ProjectMap.begin(); it!= this->ProjectMap.end(); ++it)
 	{
 		Detail::Generation::GenerateRootBFF(this, it->second[0], it->second);
-    }
+	}
 }
 
 //----------------------------------------------------------------------------
@@ -1357,19 +1396,19 @@ void cmGlobalFastbuildGenerator::GenerateBuildCommand(
 	// Select the target
 	std::string targetSelected = targetName;
 	if(targetSelected.empty())
-    {
+	{
 		targetSelected = "all";// VS uses "ALL_BUILD"; might be useful
-    }
+	}
 	if (targetSelected == "clean")
-    {
+	{
 		makeOptionsSelected.push_back("-clean");
 		targetSelected = "";
-    }
+	}
   
 	// Select the config
 	std::string configSelected = config;
 	if (configSelected.empty())
-    {
+	{
 		configSelected = "Debug";
 	}
 
