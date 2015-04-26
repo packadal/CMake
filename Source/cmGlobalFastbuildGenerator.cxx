@@ -23,6 +23,7 @@
    - Custom options for specific source files not yet supported/detected either
    - Running some of the Cmake generation, the pdb files can't be deleted (shows up errors)
    - PrebuildDependencies must only reference targets that already exist.
+   - Depends upon visual studio generator code to sort dependencies
 
   Fastbuild bugs:
    - Defining prebuild dependencies that don't exist, causes the error output when that 
@@ -43,6 +44,7 @@
 #include "cmGeneratedFileStream.h"
 #include "cmLocalGenerator.h"
 #include "cmComputeLinkInformation.h"
+#include "cmGlobalVisualStudioGenerator.h"
 #include <cmsys/Encoding.hxx>
 #include <assert.h>
 
@@ -1208,36 +1210,72 @@ public:
 	{
 		context.fc.WriteSectionHeader("Target Definitions");
 
-		// Iterate over each of the targets
+		// Collect all targets under this root generator and the transitive
+		// closure of their dependencies.
+		TargetDependSet projectTargets;
+		TargetDependSet originalTargets;
+		context.self->GetTargetSets(projectTargets, originalTargets, context.root, context.generators);
+		typedef cmGlobalVisualStudioGenerator::OrderedTargetDependSet OrderedTargets;
+		OrderedTargets orderedProjectTargets(projectTargets);
+
+		// Build a map of all targets to their local generator
+		struct PairTargetLg
+		{
+			cmLocalFastbuildGenerator * lg;
+			cmTarget * target;
+		};
+		typedef std::map<const cmTarget*, PairTargetLg> GeneratorMap;
+		GeneratorMap generatorMap;
 		for (std::vector<cmLocalGenerator*>::iterator iter = context.generators.begin();
 			iter != context.generators.end(); ++iter)
 		{
 			cmLocalFastbuildGenerator *lg = static_cast<cmLocalFastbuildGenerator*>(*iter);
 
 			cmTargets &tgts = lg->GetMakefile()->GetTargets();
-			for (cmTargets::iterator targetIter = tgts.begin(); targetIter != tgts.end();
+			for (cmTargets::iterator targetIter = tgts.begin(); 
+				targetIter != tgts.end();
 				++targetIter)
 			{
-				cmTarget &target = targetIter->second;
+				cmTarget &target = (targetIter->second);
 
-				switch (target.GetType())
-				{
-					case cmTarget::EXECUTABLE:
-					case cmTarget::SHARED_LIBRARY:
-					case cmTarget::STATIC_LIBRARY:
-					case cmTarget::MODULE_LIBRARY:
-					case cmTarget::OBJECT_LIBRARY:
-						WriteTargetDefinition(context, lg, target);
-						break;
-					case cmTarget::UTILITY:
-						// TODO
-						break;
-					case cmTarget::GLOBAL_TARGET:
-						// TODO
-						break;
-					default:
-						break;
-				}
+				PairTargetLg pair = {lg, &target};
+				generatorMap[&target] = pair;
+			}
+		}
+
+		// Now iterate each target in order
+		for (OrderedTargets::iterator targetIter = orderedProjectTargets.begin(); 
+				targetIter != orderedProjectTargets.end();
+				++targetIter)
+		{
+			const cmTargetDepend &targetDepend = (*targetIter);
+
+			GeneratorMap::iterator findResult = generatorMap.find((const cmTarget*)targetDepend);
+			if (findResult != generatorMap.end())
+			{
+				continue;
+			}
+
+			cmTarget* target = findResult->second.target;
+			cmLocalFastbuildGenerator* lg = findResult->second.lg;
+
+			switch (target->GetType())
+			{
+				case cmTarget::EXECUTABLE:
+				case cmTarget::SHARED_LIBRARY:
+				case cmTarget::STATIC_LIBRARY:
+				case cmTarget::MODULE_LIBRARY:
+				case cmTarget::OBJECT_LIBRARY:
+					WriteTargetDefinition(context, lg, *target);
+					break;
+				case cmTarget::UTILITY:
+					// TODO
+					break;
+				case cmTarget::GLOBAL_TARGET:
+					// TODO
+					break;
+				default:
+					break;
 			}
 		}
 	}
