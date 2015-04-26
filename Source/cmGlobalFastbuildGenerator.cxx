@@ -1249,9 +1249,13 @@ public:
 				++targetIter)
 		{
 			const cmTargetDepend &targetDepend = (*targetIter);
+			if(targetDepend->GetType() == cmTarget::INTERFACE_LIBRARY)
+			{
+				continue;
+			}
 
 			GeneratorMap::iterator findResult = generatorMap.find((const cmTarget*)targetDepend);
-			if (findResult != generatorMap.end())
+			if (findResult == generatorMap.end())
 			{
 				continue;
 			}
