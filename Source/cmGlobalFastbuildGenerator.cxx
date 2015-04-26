@@ -10,6 +10,13 @@
   implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
   See the License for more information.
 ============================================================================*/
+/*============================================================================
+  Development progress:
+
+
+  Limitations:
+  - Only tested/working with msvc
+============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"
 
 #include "cmGeneratorTarget.h"
@@ -1022,8 +1029,8 @@ public:
 
 				context.fc.WritePopScope();
 			}
+			context.fc.WritePopScope();
 		}
-		context.fc.WritePopScope();
 
 		// Iterate over each configuration
 		// This time to define linker settings for each config
@@ -1122,7 +1129,25 @@ public:
 				++targetIter)
 			{
 				cmTarget &target = targetIter->second;
-				WriteTargetDefinition(context, lg, target);
+
+				switch (target.GetType())
+				{
+					case cmTarget::EXECUTABLE:
+					case cmTarget::SHARED_LIBRARY:
+					case cmTarget::STATIC_LIBRARY:
+					case cmTarget::MODULE_LIBRARY:
+					case cmTarget::OBJECT_LIBRARY:
+						WriteTargetDefinition(context, lg, target);
+						break;
+					case cmTarget::UTILITY:
+						// TODO
+						break;
+					case cmTarget::GLOBAL_TARGET:
+						// TODO
+						break;
+					default:
+						break;
+				}
 			}
 		}
 	}
@@ -1395,10 +1420,7 @@ void cmGlobalFastbuildGenerator::GenerateBuildCommand(
 
 	// Select the target
 	std::string targetSelected = targetName;
-	if(targetSelected.empty())
-	{
-		targetSelected = "all";// VS uses "ALL_BUILD"; might be useful
-	}
+	// Note an empty target is a valid target (defaults to ALL anyway)
 	if (targetSelected == "clean")
 	{
 		makeOptionsSelected.push_back("-clean");
@@ -1410,6 +1432,16 @@ void cmGlobalFastbuildGenerator::GenerateBuildCommand(
 	if (configSelected.empty())
 	{
 		configSelected = "Debug";
+	}
+
+	// Select fastbuild target
+	if (targetSelected.empty())
+	{
+		targetSelected = configSelected;
+	}
+	else
+	{
+		targetSelected += "-" + configSelected;
 	}
 
 	// Build the command
@@ -1426,8 +1458,7 @@ void cmGlobalFastbuildGenerator::GenerateBuildCommand(
 	// Add the target-config to the command
 	if (!targetSelected.empty())
 	{
-		std::string realTarget = targetSelected + "-" + configSelected;
-		makeCommand.push_back(realTarget);
+		makeCommand.push_back(targetSelected);
 	}
 }
 
