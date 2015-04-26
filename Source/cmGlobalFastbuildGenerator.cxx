@@ -706,6 +706,194 @@ public:
 		std::copy(deps.begin(), deps.end(), std::back_inserter(dependencies));
 	}
 
+	struct TargetCompare
+	{
+		bool operator()(cmTarget const* l, cmTarget const* r) const
+		{
+			// Make sure ALL_BUILD is first so it is the default active project.
+			if(r->GetName() == "ALL_BUILD")
+			{
+				return false;
+			}
+			if(l->GetName() == "ALL_BUILD")
+			{
+				return true;
+			}
+
+			// Now look to see if either depends on the other recursively
+			
+
+			// Fall back to ordering by name
+			return strcmp(l->GetName().c_str(), r->GetName().c_str()) < 0;
+		}
+	};
+
+	typedef std::vector<const cmTarget*> OrderedTargetSet;
+
+	static void ComputeTargetOrderAndDependencies(
+		cmGlobalFastbuildGenerator* gg,
+		OrderedTargetSet& orderedTargets)
+	{
+		TargetDependSet projectTargets;
+		TargetDependSet originalTargets;
+		std::map<std::string, std::vector<cmLocalGenerator*> >::iterator it;
+		for(it = gg->ProjectMap.begin(); it!= gg->ProjectMap.end(); ++it)
+		{
+			std::vector<cmLocalGenerator*>& generators = it->second;
+			cmLocalFastbuildGenerator* root =
+				static_cast<cmLocalFastbuildGenerator*>(generators[0]);
+			
+			// Given this information, calculate the dependencies:
+			// Collect all targets under this root generator and the transitive
+			// closure of their dependencies.
+			
+			gg->GetTargetSets(projectTargets, originalTargets, root, generators);
+		}
+
+		// Iterate over the targets and export their order
+		for (TargetDependSet::iterator iter = projectTargets.begin();
+			iter != projectTargets.end();
+			++iter)
+		{
+			const cmTargetDepend& targetDepend = *iter;
+			const cmTarget& target = *targetDepend;
+
+			orderedTargets.push_back(&target);
+		}
+
+		struct SortByDependency
+		{
+			SortByDependency(cmGlobalFastbuildGenerator* agg)
+				: gg(agg)
+			{}
+
+			cmGlobalFastbuildGenerator* gg;
+			bool operator()(const cmTarget* l, const cmTarget* r) const
+			{
+				// Test for dependencies
+				if (aHasDependencyOnB(r, l))
+				{
+					return true;
+				}
+
+				return false;
+			}
+
+			bool aHasDependencyOnB(const cmTarget* candidate, const cmTarget* test) const
+			{
+				TargetDependSet const& ts = gg->GetTargetDirectDepends(*candidate);
+				if (ts.find(test) != ts.end())
+				{
+					return true;
+				}
+
+				for(TargetDependSet::const_iterator i = ts.begin(); i != ts.end(); ++i)
+				{
+					const cmTarget * dtarget = *i;
+					if (aHasDependencyOnB(dtarget, test))
+					{
+						return true;
+					}
+				}
+
+				return false;
+			}
+		};
+
+		// Now I have an array of all targets.
+		// Attempt to sort it
+		std::_Insertion_sort(orderedTargets.begin(), orderedTargets.end(), 
+			SortByDependency(gg));
+
+		// Validate
+		SortByDependency lessThan(gg);
+		std::vector<const cmTarget*> newOt;
+
+		// Build the reverse graph, 
+		// each target, and the set of things that depend upon it
+		typedef std::map<const cmTarget*, std::vector<const cmTarget*>> DepMap;
+		DepMap forwardDeps;
+		DepMap reverseDeps;
+		for (int i = 0; i < ((int)orderedTargets.size()); ++i)
+		{
+			const cmTarget* target = orderedTargets[i];
+			std::vector<const cmTarget*>& fwdDeps = forwardDeps[target];
+
+			TargetDependSet const& ts = gg->GetTargetDirectDepends(*target);
+			for(TargetDependSet::const_iterator iter = ts.begin(); iter != ts.end(); ++iter)
+			{
+				const cmTarget * dtarget = *iter;
+				fwdDeps.push_back(dtarget);
+				reverseDeps[dtarget].push_back(target);
+			}
+		}
+		orderedTargets.clear();
+
+		// Now iterate over each target with its list of dependencies.
+		// And dump out ones that have 0 dependencies.
+		bool written = true;
+		while (!forwardDeps.empty() && written)
+		{
+			written = false;
+			for (DepMap::iterator iter = forwardDeps.begin();
+				iter != forwardDeps.end(); ++iter)
+			{
+				std::vector<const cmTarget*>& fwdDeps = iter->second;
+				const cmTarget* target = iter->first;
+				if (!fwdDeps.empty())
+				{
+					// Looking for empty dependency lists.
+					// Those are the next to be written out
+					continue;
+				}
+
+				// dependency list is empty,
+				// add it to the output list
+				written = true;
+				orderedTargets.push_back(target);
+
+				// Use reverse dependencies to determine 
+				// what forward dep lists to adjust
+				std::vector<const cmTarget*>& revDeps = reverseDeps[target];
+				for (unsigned int i = 0; i < revDeps.size(); ++i)
+				{
+					const cmTarget* revDep = revDeps[i];
+					
+					// Fetch the list of deps on that target
+					std::vector<const cmTarget*>& revDepFwdDeps = 
+						forwardDeps[revDep];
+					// remove the one we just added from the list
+					revDepFwdDeps.erase(
+						std::remove(revDepFwdDeps.begin(), revDepFwdDeps.end(), target),
+						revDepFwdDeps.end());
+				}
+
+				// Remove it from forward deps so not
+				// considered again
+				forwardDeps.erase(target);
+
+				// Must break now as we've invalidated
+				// our forward deps iterator
+				break;
+			}
+		}
+		// Make sure we managed to find a place
+		// to insert every dependency.
+		// If this fires, then there is most likely
+		// a cycle in the graph...
+		assert(forwardDeps.empty());
+
+		for (int i = 0; i < ((int)orderedTargets.size() - 1); ++i)
+		{
+			for (int j = i + 1; j < ((int)orderedTargets.size()); ++j)
+			{
+				// i does not need to be < j.
+				// but j must not be less than i
+				assert(!lessThan(orderedTargets[j], orderedTargets[i]));
+			}
+		}
+	}
+
 private:
 
 };
@@ -743,12 +931,23 @@ class cmGlobalFastbuildGenerator::Detail::Definition
 class cmGlobalFastbuildGenerator::Detail::Generation
 {
 public:
+	struct TargetGenerationContext
+	{
+		cmTarget* target;
+		cmLocalFastbuildGenerator* root;
+		std::vector<cmLocalGenerator*> generators;
+		cmLocalFastbuildGenerator* lg;
+	};
+	typedef std::map<const cmTarget*, TargetGenerationContext> TargetContextMap;
+	typedef Detection::OrderedTargetSet OrderedTargets;
+
 	struct GenerationContext
 	{
 		cmGlobalFastbuildGenerator * self;
-		cmLocalGenerator* root;
-		std::vector<cmLocalGenerator*>& generators;
+		cmLocalFastbuildGenerator* root;
 		FileContext& fc;
+		OrderedTargets orderedTargets;
+		TargetContextMap targetContexts;
 	};
 
 	static std::string Quote(const std::string& str, const std::string& quotation = "'")
@@ -771,10 +970,54 @@ public:
 			cmSystemTools::MakeDirectory(fullPath.c_str());
 		}
 	}
-
-	static void GenerateRootBFF(cmGlobalFastbuildGenerator * self,
-		cmLocalGenerator* root, std::vector<cmLocalGenerator*>& generators)
+	
+	static void BuildTargetContexts(cmGlobalFastbuildGenerator * gg,
+		TargetContextMap& map)
 	{
+		std::map<std::string, std::vector<cmLocalGenerator*> >::iterator it;
+		for(it = gg->ProjectMap.begin(); it!= gg->ProjectMap.end(); ++it)
+		{
+			std::vector<cmLocalGenerator*>& generators = it->second;
+			cmLocalFastbuildGenerator* root =
+				static_cast<cmLocalFastbuildGenerator*>(generators[0]);
+
+			// Build a map of all targets to their local generator
+			for (std::vector<cmLocalGenerator*>::iterator iter = generators.begin();
+				iter != generators.end(); ++iter)
+			{
+				cmLocalFastbuildGenerator *lg = static_cast<cmLocalFastbuildGenerator*>(*iter);
+
+				if(gg->IsExcluded(root, lg))
+				{
+					continue;
+				}
+
+				cmTargets &tgts = lg->GetMakefile()->GetTargets();
+				for (cmTargets::iterator targetIter = tgts.begin(); 
+					targetIter != tgts.end();
+					++targetIter)
+				{
+					cmTarget &target = (targetIter->second);
+
+					if(gg->IsRootOnlyTarget(&target) &&
+						target.GetMakefile() != root->GetMakefile())
+					{
+						continue;
+					}
+
+					TargetGenerationContext targetContext =
+						{ &target, root, generators, lg };
+					map[&target] = targetContext;
+				}
+			}
+		}
+	}
+
+	static void GenerateRootBFF(cmGlobalFastbuildGenerator * self)
+	{
+		cmLocalFastbuildGenerator* root = 
+			static_cast<cmLocalFastbuildGenerator*>(self->ProjectMap.begin()->second[0]);
+
 		// Calculate filename
 		std::string fname = root->GetMakefile()->GetStartOutputDirectory();
 		fname += "/";
@@ -791,7 +1034,9 @@ public:
 
 		FileContext fc(fout);
 		GenerationContext context =
-			{ self, root, generators, fc };
+			{ self, root, fc };
+		Detection::ComputeTargetOrderAndDependencies( context.self, context.orderedTargets );
+		BuildTargetContexts( context.self, context.targetContexts );
 		WriteRootBFF(context);
 		
 		// Close file
@@ -1210,52 +1455,19 @@ public:
 	{
 		context.fc.WriteSectionHeader("Target Definitions");
 
-		// Collect all targets under this root generator and the transitive
-		// closure of their dependencies.
-		TargetDependSet projectTargets;
-		TargetDependSet originalTargets;
-		context.self->GetTargetSets(projectTargets, originalTargets, context.root, context.generators);
-		typedef cmGlobalVisualStudioGenerator::OrderedTargetDependSet OrderedTargets;
-		OrderedTargets orderedProjectTargets(projectTargets);
-
-		// Build a map of all targets to their local generator
-		struct PairTargetLg
-		{
-			cmLocalFastbuildGenerator * lg;
-			cmTarget * target;
-		};
-		typedef std::map<const cmTarget*, PairTargetLg> GeneratorMap;
-		GeneratorMap generatorMap;
-		for (std::vector<cmLocalGenerator*>::iterator iter = context.generators.begin();
-			iter != context.generators.end(); ++iter)
-		{
-			cmLocalFastbuildGenerator *lg = static_cast<cmLocalFastbuildGenerator*>(*iter);
-
-			cmTargets &tgts = lg->GetMakefile()->GetTargets();
-			for (cmTargets::iterator targetIter = tgts.begin(); 
-				targetIter != tgts.end();
-				++targetIter)
-			{
-				cmTarget &target = (targetIter->second);
-
-				PairTargetLg pair = {lg, &target};
-				generatorMap[&target] = pair;
-			}
-		}
-
 		// Now iterate each target in order
-		for (OrderedTargets::iterator targetIter = orderedProjectTargets.begin(); 
-				targetIter != orderedProjectTargets.end();
-				++targetIter)
+		for (OrderedTargets::iterator targetIter = context.orderedTargets.begin(); 
+			targetIter != context.orderedTargets.end();
+			++targetIter)
 		{
-			const cmTargetDepend &targetDepend = (*targetIter);
-			if(targetDepend->GetType() == cmTarget::INTERFACE_LIBRARY)
+			const cmTarget* constTarget = (*targetIter);
+			if(constTarget->GetType() == cmTarget::INTERFACE_LIBRARY)
 			{
 				continue;
 			}
 
-			GeneratorMap::iterator findResult = generatorMap.find((const cmTarget*)targetDepend);
-			if (findResult == generatorMap.end())
+			TargetContextMap::iterator findResult = context.targetContexts.find(constTarget);
+			if (findResult == context.targetContexts.end())
 			{
 				continue;
 			}
@@ -1379,23 +1591,31 @@ public:
 		context.fc.WriteSectionHeader("Targets");
 
 		// Iterate over each of the targets
-		for (std::vector<cmLocalGenerator*>::iterator iter = context.generators.begin();
-			iter != context.generators.end(); ++iter)
+		for (OrderedTargets::iterator targetIter = context.orderedTargets.begin(); 
+			targetIter != context.orderedTargets.end();
+			++targetIter)
 		{
-			cmLocalGenerator *lg = *iter;
-
-			cmTargets &tgts = lg->GetMakefile()->GetTargets();
-			for (cmTargets::iterator targetIter = tgts.begin(); targetIter != tgts.end();
-				++targetIter)
+			const cmTarget* constTarget = (*targetIter);
+			if(constTarget->GetType() == cmTarget::INTERFACE_LIBRARY)
 			{
-				cmTarget &target = targetIter->second;
-				for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-					iter != context.self->Configurations.end(); ++iter)
-				{
-					std::string &configName = *iter;
+				continue;
+			}
 
-					//WriteTarget(context, lg, target, configName);
-				}
+			TargetContextMap::iterator findResult = context.targetContexts.find(constTarget);
+			if (findResult == context.targetContexts.end())
+			{
+				continue;
+			}
+
+			cmTarget* target = findResult->second.target;
+			cmLocalFastbuildGenerator* lg = findResult->second.lg;
+
+			for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
+				iter != context.self->Configurations.end(); ++iter)
+			{
+				std::string &configName = *iter;
+
+				//WriteTarget(context, lg, target, configName);
 			}
 		}
 	}
@@ -1413,29 +1633,35 @@ public:
 		TargetListMap perConfig;
 		TargetListMap perTarget;
 
-		// Iterate over each of the targets
-		for (std::vector<cmLocalGenerator*>::iterator iter = context.generators.begin();
-			iter != context.generators.end(); ++iter)
+		for (OrderedTargets::iterator targetIter = context.orderedTargets.begin(); 
+			targetIter != context.orderedTargets.end();
+			++targetIter)
 		{
-			cmLocalGenerator *lg = *iter;
-
-			cmTargets &tgts = lg->GetMakefile()->GetTargets();
-			for (cmTargets::iterator targetIter = tgts.begin(); targetIter != tgts.end();
-				++targetIter)
+			const cmTarget* constTarget = (*targetIter);
+			if(constTarget->GetType() == cmTarget::INTERFACE_LIBRARY)
 			{
-				cmTarget &target = targetIter->second;
-				const std::string & targetName = target.GetName();
+				continue;
+			}
 
-				// Define compile flags
-				for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-					iter != context.self->Configurations.end(); ++iter)
-				{
-					std::string & configName = *iter;
-					std::string aliasName = targetName + "-" + configName;
+			TargetContextMap::iterator findResult = context.targetContexts.find(constTarget);
+			if (findResult == context.targetContexts.end())
+			{
+				continue;
+			}
 
-					perTarget[targetName].push_back(aliasName);
-					perConfig[configName].push_back(aliasName);
-				}
+			cmTarget* target = findResult->second.target;
+			cmLocalFastbuildGenerator* lg = findResult->second.lg;
+			const std::string & targetName = target->GetName();
+
+			// Define compile flags
+			for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
+				iter != context.self->Configurations.end(); ++iter)
+			{
+				std::string & configName = *iter;
+				std::string aliasName = targetName + "-" + configName;
+
+				perTarget[targetName].push_back(aliasName);
+				perConfig[configName].push_back(aliasName);
 			}
 		}
 
@@ -1521,12 +1747,7 @@ void cmGlobalFastbuildGenerator::Generate()
 	// Execute the standard generate process
 	cmGlobalGenerator::Generate();
 
-	// Now execute the extra fastbuild process on the project map
-	std::map<std::string, std::vector<cmLocalGenerator*> >::iterator it;
-	for(it = this->ProjectMap.begin(); it!= this->ProjectMap.end(); ++it)
-	{
-		Detail::Generation::GenerateRootBFF(this, it->second[0], it->second);
-	}
+	Detail::Generation::GenerateRootBFF(this);
 }
 
 //----------------------------------------------------------------------------
