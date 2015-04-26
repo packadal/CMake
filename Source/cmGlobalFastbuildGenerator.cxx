@@ -1015,8 +1015,9 @@ public:
 
 	static void GenerateRootBFF(cmGlobalFastbuildGenerator * self)
 	{
+
 		cmLocalFastbuildGenerator* root = 
-			static_cast<cmLocalFastbuildGenerator*>(self->ProjectMap.begin()->second[0]);
+			static_cast<cmLocalFastbuildGenerator*>(self->GetLocalGenerators()[0]);
 
 		// Calculate filename
 		std::string fname = root->GetMakefile()->GetStartOutputDirectory();
