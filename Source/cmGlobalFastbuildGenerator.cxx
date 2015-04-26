@@ -13,9 +13,24 @@
 /*============================================================================
   Development progress:
 
+  Tasks/Issues:
+   - Setup dependencies between libraries
+   - Execute unit tests against the generator somehow
+   - Fix target aliases being repeated in the output
+   - Fix cmake build using fastbuild (currently appears configuration incorrect)
+   - Validate visual studio generate output against fastbuild generate output
+   - Include flags and define flags seem to be sent to msvc with -I and -D instead of /I and /D
+   - Custom options for specific source files not yet supported/detected either
+   - Running some of the Cmake generation, the pdb files can't be deleted (shows up errors)
+   - PrebuildDependencies must only reference targets that already exist.
+
+  Fastbuild bugs:
+   - Defining prebuild dependencies that don't exist, causes the error output when that 
+	 target is actually defined. Rather than originally complaining that the target 
+	 doesn't exist where the reference is attempted.
 
   Limitations:
-  - Only tested/working with msvc
+   - Only tested/working with msvc
 ============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"
 
@@ -27,6 +42,7 @@
 #include "cmTarget.h"
 #include "cmGeneratedFileStream.h"
 #include "cmLocalGenerator.h"
+#include "cmComputeLinkInformation.h"
 #include <cmsys/Encoding.hxx>
 #include <assert.h>
 
@@ -147,9 +163,10 @@ public:
 
 	void WriteArray(const std::string& key,
 		const std::vector<std::string>& values,
-		const std::string& prefix, const std::string& suffix)
+		const std::string& prefix, const std::string& suffix,
+		const std::string& operation = "=")
 	{
-		WriteVariable(key, "");
+		WriteVariable(key, "", operation);
 		WritePushScope();
 		int size = values.size();
 		for (int index = 0; index < size; ++index)
@@ -634,6 +651,59 @@ public:
 			configName);
 	}
 
+	static void DetectTargetCompileDependencies(
+		cmGlobalFastbuildGenerator* gg,
+		cmTarget& target, 
+		std::vector<std::string>& dependencies)
+	{
+		if (target.GetType() == cmTarget::GLOBAL_TARGET)
+		{
+			// Global targets only depend on other utilities, which may not appear in
+			// the TargetDepends set (e.g. "all").
+			std::set<std::string> const& utils = target.GetUtilities();
+			std::copy(utils.begin(), utils.end(), std::back_inserter(dependencies));
+		}
+		else 
+		{
+			cmTargetDependSet const& targetDeps =
+				gg->GetTargetDirectDepends(target);
+			for (cmTargetDependSet::const_iterator i = targetDeps.begin();
+				i != targetDeps.end(); ++i)
+			{
+				const cmTargetDepend& depTarget = *i;
+				if (depTarget->GetType() == cmTarget::INTERFACE_LIBRARY)
+				{
+					continue;
+				}
+				dependencies.push_back(depTarget->GetName());
+			}
+		}
+	}
+
+	static void DetectTargetLinkDependencies(
+		cmGlobalFastbuildGenerator* gg,
+		cmTarget& target, 
+		const std::string& configName,
+		std::vector<std::string>& dependencies)
+	{
+		// Static libraries never depend on other targets for linking.
+		if (target.GetType() == cmTarget::STATIC_LIBRARY ||
+			target.GetType() == cmTarget::OBJECT_LIBRARY)
+		{
+			return;
+		}
+
+		cmComputeLinkInformation* cli =
+			target.GetLinkInformation(configName);
+		if(!cli)
+		{
+			return;
+		}
+
+		const std::vector<std::string> &deps = cli->GetDepends();
+		std::copy(deps.begin(), deps.end(), std::back_inserter(dependencies));
+	}
+
 private:
 
 };
@@ -882,6 +952,17 @@ public:
 				}
 			}
 
+			// Write the dependency list in here too
+			// So all dependant libraries are built before this one is
+			// This is incase this library depends on code generated from previous ones
+			{
+				std::vector<std::string> dependencies;
+				Detection::DetectTargetCompileDependencies( context.self, target, dependencies );
+
+				context.fc.WriteArray("PreBuildDependencies", dependencies,
+					"'", "-"+configName+"'");
+			}
+
 			context.fc.WritePopScope();
 		}
 
@@ -1092,6 +1173,15 @@ public:
 				context.fc.WriteVariable("LinkerOptions", "'$BaseLinkerOptions$ $LinkLibs$'");
 
 				context.fc.WriteArray("Libraries", objectGroups, "'" + targetName + "-", "-" + configName + "'");
+
+				// Now detect the extra dependencies for linking
+				{
+					std::vector<std::string> dependencies;
+					Detection::DetectTargetLinkDependencies( context.self, target, configName, dependencies );
+
+					context.fc.WriteArray("Libraries", dependencies,
+						"'", "'", "+");
+				}
 
 				context.fc.WriteCommand("Executable", Quote(linkRuleName));
 				context.fc.WritePushScope();
