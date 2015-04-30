@@ -385,6 +385,7 @@ public:
 	static std::string ComputeDefines(
 		cmLocalFastbuildGenerator *lg,
 		cmTarget &target,
+		const cmSourceFile* source,
 		const std::string& configName,
 		const std::string& language)
 	{
@@ -400,16 +401,16 @@ public:
 		lg->AddCompileDefinitions(defines, &target,
 			configName, language);
 
-		/*
-		lg->AppendDefines(defines,
-			source->GetProperty("COMPILE_DEFINITIONS"));
+		if (source)
 		{
+			lg->AppendDefines(defines,
+				source->GetProperty("COMPILE_DEFINITIONS"));
+
 			std::string defPropName = "COMPILE_DEFINITIONS_";
 			defPropName += cmSystemTools::UpperCase(configName);
 			lg->AppendDefines(defines,
 				source->GetProperty(defPropName));
 		}
-		*/
 
 		std::string definesString;
 		lg->JoinDefines(defines, definesString,
@@ -605,6 +606,7 @@ public:
 		cmLocalFastbuildGenerator *lg,
 		cmGeneratorTarget *gt,
 		cmTarget &target,
+		const cmSourceFile* source,
 		const std::string& language,
 		const std::string& configName)
 	{
@@ -651,6 +653,11 @@ public:
 			&target,
 			language,
 			configName);
+
+		if (source)
+		{
+			lg->AppendFlags(compileFlags, source->GetProperty("COMPILE_FLAGS"));
+		}
 	}
 
 	static void DetectTargetCompileDependencies(
@@ -1227,7 +1234,7 @@ public:
 			const std::string & objectGroupLanguage = *langIter;
 			std::string ruleObjectGroupName = "ObjectGroup_" + objectGroupLanguage;
 			objectGroups.push_back(ruleObjectGroupName);
-			
+
 			context.fc.WriteVariable(ruleObjectGroupName, "");
 			context.fc.WritePushScopeStruct();
 
@@ -1241,6 +1248,14 @@ public:
 
 				context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
 
+				struct CompileCommand
+				{
+					std::string defines;
+					std::string flags;
+					std::vector<std::string> sourceFiles;
+				};
+				std::map<std::string,CompileCommand> commandPermutations; 
+
 				// Source files
 				context.fc.WriteBlankLine();
 				context.fc.WriteComment("Source files:");
@@ -1253,18 +1268,25 @@ public:
 					Detection::FilterSourceFiles(filteredObjectSources, objectSources,
 						objectGroupLanguage);
 
-					std::vector<std::string> sourceFiles;
 					for (std::vector<cmSourceFile const*>::iterator sourceIter = objectSources.begin();
 						sourceIter != objectSources.end(); ++sourceIter)
 					{
 						cmSourceFile const *srcFile = *sourceIter;
 						std::string sourceFile = srcFile->GetFullPath();
-						sourceFiles.push_back(sourceFile);
-					}
-					context.fc.WriteArray("CompilerInputFiles", sourceFiles, "'", "'");
 
-					// Unity source files:
-					context.fc.WriteVariable("UnityInputFiles", ".CompilerInputFiles");
+						// Detect flags and defines
+						std::string compilerFlags;
+						Detection::DetectCompilerFlags(compilerFlags, 
+							lg, gt, target, srcFile, objectGroupLanguage, configName);
+						std::string compileDefines = 
+							Detection::ComputeDefines(lg, target, srcFile, configName, objectGroupLanguage);
+						
+						std::string configKey = compilerFlags + "{|}" + compileDefines;
+						CompileCommand& command = commandPermutations[configKey];
+						command.sourceFiles.push_back(sourceFile);
+						command.flags = compilerFlags;
+						command.defines = compileDefines;
+					}
 				}
 
 				context.fc.WriteBlankLine();
@@ -1288,17 +1310,13 @@ public:
 						gt,
 						false);
 					
-					std::string compileDefines = 
-						Detection::ComputeDefines(lg, target, configName, objectGroupLanguage);
-					
 					context.fc.WriteVariable("LibFlags", "'" + libflags + "'");
 					context.fc.WriteVariable("LinkLibs", "'" + linkLibs + "'");
 					context.fc.WriteVariable("CompileFlags", "'" + flags + "'");
 					context.fc.WriteVariable("LinkFlags", "'" + linkFlags + "'");
 					context.fc.WriteVariable("FrameworkPath", "'" + frameworkPath + "'");
 					context.fc.WriteVariable("LinkPath", "'" + linkPath + "'");
-					context.fc.WriteVariable("CompileDefineFlags", "'" + compileDefines + "'");
-
+					
 					std::vector<std::string> includes;
 					lg->GetIncludeDirectories(includes,
 						gt, objectGroupLanguage, configName);
@@ -1309,11 +1327,6 @@ public:
 						false,
 						false,
 						configName);
-
-					std::string compilerFlags;
-					Detection::DetectCompilerFlags(compilerFlags, 
-						lg, gt, target, objectGroupLanguage, configName);
-					context.fc.WriteVariable("CompileFlags", Quote( compilerFlags ));
 
 					context.fc.WriteVariable("IncludeFlags", Quote( linkPath ));
 
@@ -1345,15 +1358,43 @@ public:
 
 					context.fc.WriteVariable("Compiler", Quote(compilerName));
 					*/
-					
+					context.fc.WriteVariable("CompilerCmdBaseFlags", Quote(flags));
 					context.fc.WriteVariable("Compiler", "'Compiler-default'");
-					context.fc.WriteVariable("CompilerOptions", Quote(flags + " $CompileFlags$ $CompileDefineFlags$"));
 				}
 
-
+				// Iterate over all subObjectGroups
 				std::string objectGroupRuleName = targetName + "-" + ruleObjectGroupName + "-" + configName;
-				context.fc.WriteCommand("ObjectList", Quote(objectGroupRuleName));
+				std::vector<std::string> configObjectGroups;
+				int groupNameCount = 1;
+				for (std::map<std::string, CompileCommand>::iterator groupIter = commandPermutations.begin();
+					groupIter != commandPermutations.end();
+					++groupIter)
+				{
+					const CompileCommand& command = groupIter->second;
+					std::stringstream ruleName;
+					ruleName << objectGroupRuleName << "-" << (groupNameCount++);
+					configObjectGroups.push_back(ruleName.str());
+
+					context.fc.WriteCommand("ObjectList", Quote(ruleName.str()));
+					context.fc.WritePushScope();
+
+					context.fc.WriteArray("CompilerInputFiles", command.sourceFiles, "'", "'");
+
+					// Unity source files:
+					context.fc.WriteVariable("UnityInputFiles", ".CompilerInputFiles");
+
+					context.fc.WriteVariable("CompileDefineFlags", Quote( command.defines ));
+					context.fc.WriteVariable("CompileFlags", Quote( command.flags ));
+					context.fc.WriteVariable("CompilerOptions", Quote("$CompilerCmdBaseFlags$ $CompileFlags$ $CompileDefineFlags$"));
+
+					context.fc.WritePopScope();
+
+				}
+
+				// Write an alias for this object group to group them all together
+				context.fc.WriteCommand("Alias", Quote(objectGroupRuleName));
 				context.fc.WritePushScope();
+				context.fc.WriteArray("Targets", configObjectGroups, "'", "'");
 				context.fc.WritePopScope();
 
 				context.fc.WritePopScope();
