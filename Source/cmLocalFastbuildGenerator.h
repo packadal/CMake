@@ -38,6 +38,10 @@ public:
 	virtual void Generate();
 
 	void ExpandRuleVariables(std::string& s, const RuleVariables& replaceValues);
+	virtual std::string ConvertToLinkReference(
+		std::string const& lib,
+		OutputFormat format);
+
 };
 
 #endif

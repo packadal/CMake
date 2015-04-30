@@ -50,3 +50,11 @@ void cmLocalFastbuildGenerator::ExpandRuleVariables(std::string& s,
 }
 
 //----------------------------------------------------------------------------
+std::string cmLocalFastbuildGenerator::ConvertToLinkReference(
+	std::string const& lib,
+    OutputFormat format)
+{
+	return this->Convert(lib, HOME_OUTPUT, format);
+}
+
+//----------------------------------------------------------------------------
