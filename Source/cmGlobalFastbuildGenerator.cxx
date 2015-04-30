@@ -1151,9 +1151,40 @@ public:
 	static void WriteTargetDefinition(GenerationContext& context,
 		cmLocalFastbuildGenerator *lg, cmTarget &target)
 	{
-		if (target.GetType() == cmTarget::INTERFACE_LIBRARY)
+		// Detection of the link command as follows:
+		std::string linkCommand = "Library";
+		switch (target.GetType())
 		{
-			return;
+			case cmTarget::INTERFACE_LIBRARY:
+				// We don't write out interface libraries.
+				return;
+			case cmTarget::EXECUTABLE:
+			{
+				linkCommand = "Executable";
+				break;
+			}
+			case cmTarget::SHARED_LIBRARY:
+			{
+				linkCommand = "DLL";
+				break;
+			}
+			case cmTarget::STATIC_LIBRARY:
+			case cmTarget::MODULE_LIBRARY:
+			case cmTarget::OBJECT_LIBRARY:
+			{
+				// No changes required
+				break;
+			}
+			case cmTarget::UTILITY:
+			case cmTarget::GLOBAL_TARGET:
+			case cmTarget::UNKNOWN_LIBRARY:
+			{
+				// Ignoring this target generation...
+				// Still generate a valid target by the name,
+				// but don't make it do anything
+				linkCommand = "Alias";
+				return;
+			}
 		}
 
 		std::string targetName = target.GetName();
@@ -1194,7 +1225,7 @@ public:
 				context.fc.WriteVariable("TargetNameSO", Quote(targetNames.targetNameSO));
 				context.fc.WriteVariable("TargetNameReal", Quote(targetNames.targetNameReal));
 
-				std::string targetOutDir = target.GetDirectory(configName) + "/" + configName + "/";
+				std::string targetOutDir = target.GetDirectory(configName) + "/";
 				cmSystemTools::ConvertToOutputSlashes(targetOutDir);
 
 				context.fc.WriteVariable("TargetOutDir", Quote(targetOutDir));
@@ -1462,18 +1493,35 @@ public:
 				context.fc.WriteVariable("LinkerOptions", "'$BaseLinkerOptions$ $LinkLibs$'");
 
 				context.fc.WriteArray("Libraries", objectGroups, "'" + targetName + "-", "-" + configName + "'");
+				context.fc.WriteArray("LibrarianAdditionalInputs", objectGroups, "'" + targetName + "-", "-" + configName + "'");
 
 				// Now detect the extra dependencies for linking
 				{
 					std::vector<std::string> dependencies;
 					Detection::DetectTargetLinkDependencies( context.self, target, configName, dependencies );
-
+					
 					context.fc.WriteArray("Libraries", dependencies,
+						"'", "'", "+");
+					context.fc.WriteArray("LibrarianAdditionalInputs", dependencies,
 						"'", "'", "+");
 				}
 
-				context.fc.WriteCommand("Executable", Quote(linkRuleName));
+				context.fc.WriteCommand(linkCommand, Quote(linkRuleName));
 				context.fc.WritePushScope();
+				
+				// Push dummy definitions for compilation variables
+				// These variables are required by the Library command
+				context.fc.WriteVariable("Compiler", "'Compiler-default'");
+				context.fc.WriteVariable("CompilerOptions", "'%1 %2'");
+				context.fc.WriteVariable("CompilerOutputPath", "'/dummy/'");
+				
+				// These variables are required by the Library command as well
+				// we just need to transfer the values in the linker variables
+				// to these locations
+				context.fc.WriteVariable("Librarian","'$Linker$'");
+				context.fc.WriteVariable("LibrarianOptions","'$LinkerOptions$'");
+				context.fc.WriteVariable("LibrarianOutput","'$LinkerOutput$'");
+
 				context.fc.WritePopScope();
 			}
 
@@ -1854,6 +1902,21 @@ void cmGlobalFastbuildGenerator::GenerateBuildCommand(
 	if (!targetSelected.empty())
 	{
 		makeCommand.push_back(targetSelected);
+	}
+}
+
+//----------------------------------------------------------------------------
+void cmGlobalFastbuildGenerator::AppendDirectoryForConfig(
+	const std::string& prefix,
+	const std::string& config,
+	const std::string& suffix,
+	std::string& dir)
+{
+	if(!config.empty())
+	{
+		dir += prefix;
+		dir += config;
+		dir += suffix;
 	}
 }
 
