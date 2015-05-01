@@ -907,6 +907,15 @@ public:
 		{
 			bool operator()(const cmTarget* target) const
 			{
+				if (target->GetType() == cmTarget::UTILITY ||
+					target->GetType() == cmTarget::GLOBAL_TARGET)
+				{
+					// Temporarily disable all utilities and global targets.
+					// no good way to define dependancies for these things
+					// in fbuild yet. And they're not 100% necessary
+					return true;
+				}
+
 				if (target->GetType() == cmTarget::GLOBAL_TARGET)
 				{
 					// We only want to process global targets that live in the home
@@ -1220,10 +1229,6 @@ public:
 		context.fc.WriteVariable(ruleTargetName, "");
 		context.fc.WritePushScopeStruct();
 
-		// Write the dependencies of this target
-		context.fc.WriteArray("PreBuildDependencies", std::vector<std::string>(), "'", "'");
-		context.fc.WriteArray("Libraries", std::vector<std::string>(), "'", "'");
-
 		// Iterate over each configuration
 		// This time to define linker settings for each config
 		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
@@ -1349,44 +1354,6 @@ public:
 				context.fc.WriteBlankLine();
 				context.fc.WriteComment("Compiler options:");
 				{
-					std::string libflags;
-					lg->GetStaticLibraryFlags(libflags, configName, &target);
-
-					std::string linkLibs;
-					std::string flags;
-					std::string linkFlags;
-					std::string frameworkPath;
-					std::string linkPath;
-
-					lg->GetTargetFlags(
-						linkLibs,
-						flags,
-						linkFlags,
-						frameworkPath,
-						linkPath,
-						gt,
-						false);
-					
-					context.fc.WriteVariable("LibFlags", "'" + libflags + "'");
-					context.fc.WriteVariable("LinkLibs", "'" + linkLibs + "'");
-					context.fc.WriteVariable("CompileFlags", "'" + flags + "'");
-					context.fc.WriteVariable("LinkFlags", "'" + linkFlags + "'");
-					context.fc.WriteVariable("FrameworkPath", "'" + frameworkPath + "'");
-					context.fc.WriteVariable("LinkPath", "'" + linkPath + "'");
-					
-					std::vector<std::string> includes;
-					lg->GetIncludeDirectories(includes,
-						gt, objectGroupLanguage, configName);
-					std::string includeFlags = lg->GetIncludeFlags(
-						includes,
-						gt,
-						objectGroupLanguage,
-						false,
-						false,
-						configName);
-
-					context.fc.WriteVariable("IncludeFlags", Quote( linkPath ));
-
 					// Tie together the variables
 					context.fc.WriteVariable("CompilerOutputPath", "'$TargetOutDir$'");
 
@@ -1405,16 +1372,6 @@ public:
 					std::string flags;
 					Detection::SplitExecutableAndFlags(compileCmd, executable, flags);
 
-					// Define the compiler
-					/*
-					std::string compilerName = "Compiler-" + targetName + "-" + ruleObjectGroupName + "-" + configName;
-					context.fc.WriteCommand("Compiler", Quote(compilerName));
-					context.fc.WritePushScope();
-					context.fc.WriteVariable("Executable", Quote(executable));
-					context.fc.WritePopScope();
-
-					context.fc.WriteVariable("Compiler", Quote(compilerName));
-					*/
 					context.fc.WriteVariable("CompilerCmdBaseFlags", Quote(flags));
 					context.fc.WriteVariable("Compiler", "'Compiler-default'");
 				}
@@ -1476,9 +1433,6 @@ public:
 			context.fc.WriteComment("Linker options:");
 			// Linker options
 			{
-				std::string libflags;
-				lg->GetStaticLibraryFlags(libflags, configName, &target);
-
 				std::string linkLibs;
 				std::string targetFlags;
 				std::string linkFlags;
@@ -1494,13 +1448,8 @@ public:
 					gt,
 					false);
 
-				context.fc.WriteVariable("LibFlags", "'" + libflags + "'");
 				context.fc.WriteVariable("LinkLibs", "'" + linkLibs + "'");
-				context.fc.WriteVariable("TargetFlags", "'" + targetFlags + "'");
 				context.fc.WriteVariable("LinkFlags", "'" + linkFlags + "'");
-				context.fc.WriteVariable("FrameworkPath", "'" + frameworkPath + "'");
-				context.fc.WriteVariable("LinkPath", "'" + linkPath + "'");
-				context.fc.WriteVariable("CompileDefineFlags", "'" + std::string() + "'");
 
 				// Remove the command from the front and leave the flags behind
 				std::string linkCmd;
@@ -1519,7 +1468,6 @@ public:
 				context.fc.WriteVariable("LinkerOptions", "'$BaseLinkerOptions$ $LinkLibs$'");
 
 				context.fc.WriteArray("Libraries", objectGroups, "'" + targetName + "-", "-" + configName + "'");
-				context.fc.WriteArray("LibrarianAdditionalInputs", objectGroups, "'" + targetName + "-", "-" + configName + "'");
 
 				// Now detect the extra dependencies for linking
 				{
@@ -1528,26 +1476,29 @@ public:
 					
 					context.fc.WriteArray("Libraries", dependencies,
 						"'", "'", "+");
-					context.fc.WriteArray("LibrarianAdditionalInputs", dependencies,
-						"'", "'", "+");
 				}
-
+				
 				context.fc.WriteCommand(linkCommand, Quote(linkRuleName));
 				context.fc.WritePushScope();
-				
-				// Push dummy definitions for compilation variables
-				// These variables are required by the Library command
-				context.fc.WriteVariable("Compiler", "'Compiler-default'");
-				context.fc.WriteVariable("CompilerOptions", "'%1 %2'");
-				context.fc.WriteVariable("CompilerOutputPath", "'/dummy/'");
-				
-				// These variables are required by the Library command as well
-				// we just need to transfer the values in the linker variables
-				// to these locations
-				context.fc.WriteVariable("Librarian","'$Linker$'");
-				context.fc.WriteVariable("LibrarianOptions","'$LinkerOptions$'");
-				context.fc.WriteVariable("LibrarianOutput","'$LinkerOutput$'");
+				if (linkCommand == "Library")
+				{
+					context.fc.WriteComment("Convert the linker options to work with libraries");
 
+					// Push dummy definitions for compilation variables
+					// These variables are required by the Library command
+					context.fc.WriteVariable("Compiler", "'Compiler-default'");
+					context.fc.WriteVariable("CompilerOptions", "'%1 %2'");
+					context.fc.WriteVariable("CompilerOutputPath", "'/dummy/'");
+					
+					// These variables are required by the Library command as well
+					// we just need to transfer the values in the linker variables
+					// to these locations
+					context.fc.WriteVariable("Librarian","'$Linker$'");
+					context.fc.WriteVariable("LibrarianOptions","'$LinkerOptions$'");
+					context.fc.WriteVariable("LibrarianOutput","'$LinkerOutput$'");
+
+					context.fc.WriteVariable("LibrarianAdditionalInputs", ".Libraries");
+				}
 				context.fc.WritePopScope();
 			}
 
