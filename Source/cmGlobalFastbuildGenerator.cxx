@@ -1512,9 +1512,6 @@ public:
 			context.fc.WritePopScope();
 		}
 
-		// Output the list of all objectList definitions
-		context.fc.WriteArray("ObjectGroups", objectGroups, ".", "");
-
 		context.fc.WritePopScope();
 	}
 
