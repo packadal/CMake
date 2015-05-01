@@ -14,16 +14,13 @@
   Development progress:
 
   Tasks/Issues:
-   - Setup dependencies between libraries
    - Execute unit tests against the generator somehow
    - Fix target aliases being repeated in the output
    - Fix cmake build using fastbuild (currently appears configuration incorrect)
-   - Validate visual studio generate output against fastbuild generate output
-   - Include flags and define flags seem to be sent to msvc with -I and -D instead of /I and /D
-   - Custom options for specific source files not yet supported/detected either
    - Running some of the Cmake generation, the pdb files can't be deleted (shows up errors)
-   - PrebuildDependencies must only reference targets that already exist.
    - Depends upon visual studio generator code to sort dependencies
+   - When generating CMAKE from scratch, it sometimes errors with fortran complaints and fails generation?
+     a re-run will succeed.
 
   Fastbuild bugs:
    - Defining prebuild dependencies that don't exist, causes the error output when that 
@@ -31,7 +28,7 @@
 	 doesn't exist where the reference is attempted.
 
   Limitations:
-   - Only tested/working with msvc
+   - Only tested/working with MSVC
 ============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"
 
@@ -901,6 +898,35 @@ public:
 		}
 	}
 
+	static void StripNestedGlobalTargets( OrderedTargetSet& orderedTargets )
+	{
+		// Iterate over all targets and remove the ones that are 
+		// not needed for generation.
+		// i.e. the nested global targets
+		struct RemovalTest
+		{
+			bool operator()(const cmTarget* target) const
+			{
+				if (target->GetType() == cmTarget::GLOBAL_TARGET)
+				{
+					// We only want to process global targets that live in the home
+					// (i.e. top-level) directory.  CMake creates copies of these targets
+					// in every directory, which we don't need.
+					cmMakefile *mf = target->GetMakefile();
+					if (strcmp(mf->GetStartDirectory(), mf->GetHomeDirectory()) != 0)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+		};
+
+		orderedTargets.erase(
+			std::remove_if(orderedTargets.begin(), orderedTargets.end(), RemovalTest()),
+			orderedTargets.end());
+	}
+
 private:
 
 };
@@ -1044,6 +1070,7 @@ public:
 		GenerationContext context =
 			{ self, root, fc };
 		Detection::ComputeTargetOrderAndDependencies( context.self, context.orderedTargets );
+		Detection::StripNestedGlobalTargets( context.orderedTargets );
 		BuildTargetContexts( context.self, context.targetContexts );
 		WriteRootBFF(context);
 		
@@ -1065,7 +1092,6 @@ public:
 		// Sort targets
 
 		WriteTargetDefinitions( context );
-		WriteTargets( context );
 		WriteAliases( context );
 	}
 
@@ -1585,131 +1611,7 @@ public:
 			}
 		}
 	}
-
-	static void WriteTarget(GenerationContext& context,
-		cmLocalGenerator *lg, cmTarget &target, const std::string& configName)
-	{
-		std::string targetName = target.GetName();
-		std::string targetDef = "TargetDef_" + targetName;
-		std::string targetNameBase = targetName + "-" + configName;
-		std::string targetNameCompileBase = targetNameBase + "-Compile";
-		std::string targetNameLink = targetNameBase + "-Link";
-		std::vector<std::string> deps;
-		deps.push_back(targetNameCompileBase);
-
-		// Always writing two targets, then combining them using an alias.
-		// First is the object list compilation definiton.
-		// The second links the compiled objects to send to the output
-		
-		// Detection of the second command as follows:
-		std::string linkCommand = "Library";
-		switch (target.GetType())
-		{
-			case cmTarget::EXECUTABLE:
-			{
-				linkCommand = "Executable";
-				break;
-			}
-			case cmTarget::SHARED_LIBRARY:
-			{
-				linkCommand = "DLL";
-				break;
-			}
-			case cmTarget::STATIC_LIBRARY:
-			case cmTarget::MODULE_LIBRARY:
-			case cmTarget::OBJECT_LIBRARY:
-			{
-				// No changes required
-				break;
-			}
-			case cmTarget::UTILITY:
-			case cmTarget::GLOBAL_TARGET:
-			case cmTarget::INTERFACE_LIBRARY:
-			case cmTarget::UNKNOWN_LIBRARY:
-			{
-				// Ignoring this target generation...
-				// Still generate a valid target by the name,
-				// but don't make it do anything
-				linkCommand = "Alias";
-				return;
-			}
-		}
-
-		// Write fastbuild target definition 
-		context.fc.WriteComment("Defining target" + targetName + "-" + configName);
-		context.fc.WritePushScope(); // Scope push
-		
-		context.fc.WriteVariable("TargetList", "{}");
-
-		context.fc.WriteCommand("Using", "." + targetDef);
-
-		context.fc.WriteCommand("ForEach", ".ObjectGroup in .ObjectGroups");
-		context.fc.WritePushScope();
-
-		context.fc.WriteCommand("Using", ".ObjectGroup");
-		context.fc.WriteCommand("Using", "." + configName + "Config");
 	
-		std::string objectListName = targetNameCompileBase + "-$.ConfigName$";
-		context.fc.WriteCommand("ObjectList", Quote(objectListName));
-		
-		context.fc.WriteVariable("TargetList", "{Quote(objectListName)}", "+");
-
-		context.fc.WritePopScope();
-		
-		// Write the second target definition
-		context.fc.WriteCommand(linkCommand, "'" + targetNameLink + "'");
-		context.fc.WritePushScope();
-
-		context.fc.WriteCommand("Using", "." + configName + "LinkerConfig");
-
-		context.fc.WriteArray("PreBuildDependencies", deps, "'", "'");
-		context.fc.WriteArray("Libraries", deps, "'", "'");
-
-		context.fc.WritePopScope();
-
-		// Write an alias to combine the two above
-		context.fc.WriteCommand("Alias", "'" + targetNameBase + "'");
-		context.fc.WritePushScope();
-		context.fc.WriteVariable("Targets", "{ '" + targetNameBase + "-Compile', '" + targetNameBase + "-Link' }");
-		context.fc.WritePopScope();
-
-		context.fc.WritePopScope(); // Scope push
-	}
-
-	static void WriteTargets(GenerationContext& context)
-	{
-		context.fc.WriteSectionHeader("Targets");
-
-		// Iterate over each of the targets
-		for (OrderedTargets::iterator targetIter = context.orderedTargets.begin(); 
-			targetIter != context.orderedTargets.end();
-			++targetIter)
-		{
-			const cmTarget* constTarget = (*targetIter);
-			if(constTarget->GetType() == cmTarget::INTERFACE_LIBRARY)
-			{
-				continue;
-			}
-
-			TargetContextMap::iterator findResult = context.targetContexts.find(constTarget);
-			if (findResult == context.targetContexts.end())
-			{
-				continue;
-			}
-
-			cmTarget* target = findResult->second.target;
-			cmLocalFastbuildGenerator* lg = findResult->second.lg;
-
-			for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-				iter != context.self->Configurations.end(); ++iter)
-			{
-				std::string &configName = *iter;
-
-				//WriteTarget(context, lg, target, configName);
-			}
-		}
-	}
-
 	static void WriteAliases(GenerationContext& context)
 	{
 		context.fc.WriteSectionHeader("Aliases");
