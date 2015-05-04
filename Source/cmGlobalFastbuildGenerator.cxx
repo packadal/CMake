@@ -1338,8 +1338,8 @@ public:
 					Detection::FilterSourceFiles(filteredObjectSources, objectSources,
 						objectGroupLanguage);
 
-					for (std::vector<cmSourceFile const*>::iterator sourceIter = objectSources.begin();
-						sourceIter != objectSources.end(); ++sourceIter)
+					for (std::vector<cmSourceFile const*>::iterator sourceIter = filteredObjectSources.begin();
+						sourceIter != filteredObjectSources.end(); ++sourceIter)
 					{
 						cmSourceFile const *srcFile = *sourceIter;
 						std::string sourceFile = srcFile->GetFullPath();
