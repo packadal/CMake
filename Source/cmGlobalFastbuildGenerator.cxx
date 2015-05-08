@@ -20,7 +20,13 @@
    - Running some of the Cmake generation, the pdb files can't be deleted (shows up errors)
    - Depends upon visual studio generator code to sort dependencies
    - When generating CMAKE from scratch, it sometimes errors with fortran complaints and fails generation?
-     a re-run will succeed.
+	 a re-run will succeed.
+   - Linker for msvc uses the cmake command to callback. Don't think this is an issue since
+	 I think compilation is the part that gets distributed anyway.
+	 But it might mean that the cache has trouble calculating deps for obj->lib/exe. 
+	 Not sure if Fastbuild supports that anyway yet
+   - Multiple compilers for languages not supported yet. Hence everything is attempting to compile
+	 using the C++ compiler.
 
   Fastbuild bugs:
    - Defining prebuild dependencies that don't exist, causes the error output when that 
@@ -29,6 +35,94 @@
 
   Limitations:
    - Only tested/working with MSVC
+
+  Current list of unit tests failing:
+
+	77% tests passed, 84 tests failed out of 372
+	33 - CompileFeatures (Failed)
+	35 - VSResource (Failed)
+	39 - COnly (Failed)
+	40 - CxxOnly (Failed)
+	41 - CxxSubdirC (Failed)
+	42 - IPO (Failed)
+	43 - OutDir (Failed)
+	44 - ObjectLibrary (Failed)
+	48 - ExternalOBJ (Failed)
+	49 - LoadCommand (Failed)
+	50 - LinkDirectory (Failed)
+	58 - SourceGroups (Failed)
+	59 - Preprocess (Failed)
+	63 - EmptyLibrary (Failed)
+	64 - CompileDefinitions (Failed)
+	65 - CompileOptions (Failed)
+	66 - CompatibleInterface (Failed)
+	67 - AliasTarget (Failed)
+	69 - InterfaceLibrary (Failed)
+	70 - ConfigSources (Failed)
+	74 - BundleUtilities (Failed)
+	75 - CMakeBuildTest (Failed)
+	77 - Module.CheckTypeSize (Failed)
+	78 - Module.ExternalData (Failed)
+	79 - Module.GenerateExportHeader (Failed)
+	82 - PositionIndependentTargets (Failed)
+	101 - SubProject-Stage2 (Failed)
+	102 - Framework (Failed)
+	103 - TargetName (Failed)
+	104 - LibName (Failed)
+	105 - CustComDepend (Failed)
+	107 - GeneratorExpression (Failed)
+	108 - CustomCommand (Failed)
+	109 - CustomCommandByproducts (Failed)
+	110 - EmptyDepends (Failed)
+	111 - CustomCommandWorkingDirectory (Failed)
+	112 - OutOfSource (Failed)
+	113 - BuildDepends (Failed)
+	114 - SimpleInstall (Failed)
+	115 - SimpleInstall-Stage2 (Failed)
+	126 - LoadedCommandOneConfig (Failed)
+	127 - complex (Failed)
+	128 - complexOneConfig (Failed)
+	131 - ExternalProject (Failed)
+	132 - ExternalProjectLocal (Failed)
+	133 - ExternalProjectUpdateSetup (Failed)
+	134 - ExternalProjectUpdate (Failed)
+	139 - TutorialStep5 (Failed)
+	140 - TutorialStep6 (Failed)
+	141 - TutorialStep7 (Failed)
+	142 - testing (Failed)
+	143 - wrapping (Failed)
+	144 - qtwrapping (Failed)
+	148 - Dependency (Failed)
+	149 - JumpWithLibOut (Failed)
+	150 - JumpNoLibOut (Failed)
+	151 - Plugin (Failed)
+	156 - PDBDirectoryAndName (Failed)
+	157 - PrecompiledHeader (Failed)
+	158 - ModuleDefinition (Failed)
+	160 - MFC (Failed)
+	161 - VSMASM (Failed)
+	168 - CTest.BuildCommand.ProjectInSubdir (Failed)
+	185 - CTestConfig.Script.Debug (Failed)
+	186 - CTestConfig.Dashboard.Debug (Failed)
+	187 - CTestConfig.Script.MinSizeRel (Failed)
+	188 - CTestConfig.Dashboard.MinSizeRel (Failed)
+	189 - CTestConfig.Script.Release (Failed)
+	190 - CTestConfig.Dashboard.Release (Failed)
+	191 - CTestConfig.Script.RelWithDebInfo (Failed)
+	192 - CTestConfig.Dashboard.RelWithDebInfo (Failed)
+	195 - CMakeCommands.target_link_libraries (Failed)
+	198 - CMakeCommands.target_compile_options (Failed)
+	225 - IncludeDirectories (Failed)
+	226 - InterfaceLinkLibraries (Failed)
+	239 - CMakeOnly.CheckStructHasMember (Failed)
+	256 - RunCMake.CMP0026 (Failed)
+	269 - RunCMake.CMP0051 (Failed)
+	276 - RunCMake.Configure (Failed)
+	281 - RunCMake.GeneratorExpression (Failed)
+	286 - RunCMake.ObjectLibrary (Failed)
+	288 - RunCMake.TargetSources (Failed)
+	290 - RunCMake.CompileFeatures (Failed)
+	332 - RunCMake.File_Generate (Failed)
 ============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"
 
