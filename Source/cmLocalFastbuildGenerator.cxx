@@ -58,3 +58,17 @@ std::string cmLocalFastbuildGenerator::ConvertToLinkReference(
 }
 
 //----------------------------------------------------------------------------
+void cmLocalFastbuildGenerator::ComputeObjectFilenames(
+	std::map<cmSourceFile const*, std::string>& mapping,
+	cmGeneratorTarget const* gt)
+{
+	for (std::map<cmSourceFile const*, std::string>::iterator
+		si = mapping.begin(); si != mapping.end(); ++si)
+	{
+		cmSourceFile const* sf = si->first;
+		si->second = this->GetObjectFileNameWithoutTarget(*sf,
+			gt->ObjectDirectory);
+	}
+}
+
+//----------------------------------------------------------------------------

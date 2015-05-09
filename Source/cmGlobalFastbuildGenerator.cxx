@@ -39,7 +39,6 @@
   Current list of unit tests failing:
 
 	77% tests passed, 84 tests failed out of 372
-	40 - CxxOnly (Failed)
 	41 - CxxSubdirC (Failed)
 	42 - IPO (Failed)
 	43 - OutDir (Failed)
@@ -1243,6 +1242,9 @@ public:
 		}
 
 		// Now output a compiler for each of these languages
+		typedef std::map<std::string, std::string> StringMap;
+		StringMap compilerToCompilerName;
+		StringMap languageToCompiler;
 		for (std::set<std::string>::iterator iter = languages.begin();
 			iter != languages.end();
 			++iter)
@@ -1257,6 +1259,27 @@ public:
 				return false;
 			}
 
+			// Add the language to the compiler's name
+			std::string& compilerName = compilerToCompilerName[compilerLocation];
+			if (compilerName.empty())
+			{
+				compilerName = "Compiler";
+			}
+			compilerName += "-";
+			compilerName += language;
+
+			// Now add the language to point to that compiler location
+			languageToCompiler[language] = compilerLocation;
+		}
+
+		// Now output all the compilers
+		for (StringMap::iterator iter = compilerToCompilerName.begin();
+			iter != compilerToCompilerName.end();
+			++iter)
+		{
+			const std::string& compilerLocation = iter->first;
+			const std::string& compilerName = iter->second;
+
 			// Strip out the path to the compiler
 			std::string compilerPath = 
 				cmSystemTools::GetFilenamePath( compilerLocation );
@@ -1266,7 +1289,6 @@ public:
 			cmSystemTools::ConvertToOutputSlashes( compilerPath );
 			cmSystemTools::ConvertToOutputSlashes( compilerFile );
 
-			std::string compilerName = "Compiler-" + language;
 			// Write out the compiler that has been configured
 			context.fc.WriteCommand("Compiler", Quote(compilerName));
 			context.fc.WritePushScope();
@@ -1275,6 +1297,24 @@ public:
 			context.fc.WritePopScope();
 		}
 
+		// Now output the compiler names according to language as variables
+		for (StringMap::iterator iter = languageToCompiler.begin();
+			iter != languageToCompiler.end();
+			++iter)
+		{
+			const std::string& language = iter->first;
+			const std::string& compilerLocation = iter->second;
+			const std::string& compilerName = compilerToCompilerName[compilerLocation];
+
+			// Output a default compiler to absorb the library requirements for a compiler
+			if (iter == languageToCompiler.begin())
+			{
+				context.fc.WriteVariable("Compiler_dummy", Quote(compilerName));
+			}
+
+			context.fc.WriteVariable("Compiler_"+language, Quote(compilerName));
+		}
+		
 		return true;
 	}
 	
@@ -1514,8 +1554,8 @@ public:
 
 					context.fc.WriteVariable("CompilerCmdBaseFlags", Quote(flags));
 
-					std::string compilerName = "Compiler-" + objectGroupLanguage;
-					context.fc.WriteVariable("Compiler", Quote(compilerName));
+					std::string compilerName = ".Compiler_" + objectGroupLanguage;
+					context.fc.WriteVariable("Compiler", compilerName);
 				}
 
 				// Iterate over all subObjectGroups
@@ -1633,7 +1673,7 @@ public:
 
 						// Push dummy definitions for compilation variables
 						// These variables are required by the Library command
-						context.fc.WriteVariable("Compiler", "'Compiler-default'");
+						context.fc.WriteVariable("Compiler", ".Compiler_dummy");
 						context.fc.WriteVariable("CompilerOptions", "'%1 %2'");
 						context.fc.WriteVariable("CompilerOutputPath", "'/dummy/'");
 					

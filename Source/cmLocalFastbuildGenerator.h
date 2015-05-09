@@ -41,6 +41,9 @@ public:
 	virtual std::string ConvertToLinkReference(
 		std::string const& lib,
 		OutputFormat format);
+	virtual void ComputeObjectFilenames(
+		std::map<cmSourceFile const*, std::string>& mapping,
+		cmGeneratorTarget const* gt);
 
 };
 
