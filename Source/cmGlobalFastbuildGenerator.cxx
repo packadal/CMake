@@ -39,8 +39,6 @@
   Current list of unit tests failing:
 
 	77% tests passed, 84 tests failed out of 372
-	41 - CxxSubdirC (Failed)
-	42 - IPO (Failed)
 	43 - OutDir (Failed)
 	44 - ObjectLibrary (Failed)
 	48 - ExternalOBJ (Failed)
@@ -382,6 +380,11 @@ public:
 		std::string targetNameImport;
 		std::string targetNamePDB;
 		std::string targetNameSO;
+	
+		std::string targetOutput;
+		std::string targetOutputReal;
+		std::string targetOutputImplib;
+		std::string targetOutputDir;
 	};
 
 	static void DetectOutput(
@@ -409,6 +412,48 @@ public:
 				targetNamesOut.targetNamePDB,
 				configName);
 		}
+		
+		if (target.HaveWellDefinedOutputFiles())
+		{
+			targetNamesOut.targetOutputDir = target.GetDirectory(configName) + "/";
+
+			targetNamesOut.targetOutput = target.GetFullPath(configName);
+			targetNamesOut.targetOutputReal = target.GetFullPath(configName,
+				/*implib=*/false,
+				/*realpath=*/true);
+			targetNamesOut.targetOutputImplib = target.GetFullPath(configName,
+				/*implib=*/true);
+		}
+		else
+		{
+			targetNamesOut.targetOutputDir = target.GetMakefile()->GetStartOutputDirectory();
+			if (targetNamesOut.targetOutputDir.empty() || 
+				targetNamesOut.targetOutputDir == ".")
+			{
+				targetNamesOut.targetOutputDir = target.GetName();
+			}
+			else 
+			{
+				targetNamesOut.targetOutputDir += "/";
+				targetNamesOut.targetOutputDir += target.GetName();
+			}
+			targetNamesOut.targetOutputDir += "/";
+			targetNamesOut.targetOutputDir += configName;
+			targetNamesOut.targetOutputDir += "/";
+
+			targetNamesOut.targetOutput = targetNamesOut.targetOutputDir + "/" +
+				targetNamesOut.targetNameOut;
+			targetNamesOut.targetOutputImplib = targetNamesOut.targetOutputDir + "/" +
+				targetNamesOut.targetNameImport;
+			targetNamesOut.targetOutputReal = targetNamesOut.targetOutputDir + "/" +
+				targetNamesOut.targetNameReal;
+		}
+
+		// Make sure all obey the correct slashes
+		cmSystemTools::ConvertToOutputSlashes(targetNamesOut.targetOutput);
+		cmSystemTools::ConvertToOutputSlashes(targetNamesOut.targetOutputImplib);
+		cmSystemTools::ConvertToOutputSlashes(targetNamesOut.targetOutputReal);
+		cmSystemTools::ConvertToOutputSlashes(targetNamesOut.targetOutputDir);
 	}
 
 	static void ComputeLinkCmds(std::vector<std::string> & linkCmds,
@@ -1445,35 +1490,18 @@ public:
 				context.fc.WriteVariable("TargetNameSO", Quote(targetNames.targetNameSO));
 				context.fc.WriteVariable("TargetNameReal", Quote(targetNames.targetNameReal));
 
-				std::string targetOutDir;
-				if (target.HaveWellDefinedOutputFiles())
-				{
-					targetOutDir = target.GetDirectory(configName) + "/";
-				}
-				else
-				{
-					targetOutDir = target.GetMakefile()->GetStartOutputDirectory();
-					if (targetOutDir.empty() || targetOutDir == ".")
-					{
-						targetOutDir = target.GetName();
-					}
-					else 
-					{
-						targetOutDir += "/";
-						targetOutDir += target.GetName();
-					}
-					targetOutDir += "/";
-					targetOutDir += configName;
-					targetOutDir += "/";
-				}
-				cmSystemTools::ConvertToOutputSlashes(targetOutDir);
-				context.fc.WriteVariable("TargetOutDir", Quote(targetOutDir));
+				// TODO: Remove this if these variables aren't used... 
+				// They've been added for testing
+				context.fc.WriteVariable("TargetOutput", Quote(targetNames.targetOutput));
+				context.fc.WriteVariable("TargetOutputImplib", Quote(targetNames.targetOutputImplib));
+				context.fc.WriteVariable("TargetOutputReal", Quote(targetNames.targetOutputReal));
+				context.fc.WriteVariable("TargetOutDir", Quote(targetNames.targetOutputDir));
 
 				if (target.GetType() != cmTarget::OBJECT_LIBRARY)
 				{
 					// on Windows the output dir is already needed at compile time
 					// ensure the directory exists (OutDir test)
-					EnsureDirectoryExists(targetOutDir, context);
+					EnsureDirectoryExists(targetNames.targetOutputDir, context);
 				}
 			}
 
@@ -1678,8 +1706,7 @@ public:
 					context.fc.WriteVariable("Linker", Quote(executable));
 					context.fc.WriteVariable("BaseLinkerOptions", Quote(flags));
 
-					context.fc.WriteVariable("LibrarianOutput", "'$TargetOutDir$$TargetNameOut$'");
-					context.fc.WriteVariable("LinkerOutput", "'$TargetOutDir$$TargetNameOut$'");
+					context.fc.WriteVariable("LinkerOutput", "'$TargetOutput$'");
 					context.fc.WriteVariable("LinkerOptions", "'$BaseLinkerOptions$ $LinkLibs$'");
 
 					context.fc.WriteArray("Libraries", objectGroups, "'" + targetName + "-", "-" + configName + "'");
