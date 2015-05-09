@@ -665,9 +665,10 @@ public:
 	static void DetectLanguages(std::set<std::string> & languages,
 		cmGlobalFastbuildGenerator * self,
 		cmLocalFastbuildGenerator *lg,
-		cmGeneratorTarget *gt,
 		cmTarget &target)
 	{
+		cmGeneratorTarget *gt = self->GetGeneratorTarget(&target);
+
 		for (std::vector<std::string>::iterator iter = self->Configurations.begin();
 			iter != self->Configurations.end(); ++iter)
 		{
@@ -1228,31 +1229,48 @@ public:
 
 		context.fc.WriteSectionHeader("Compilers");
 
-		// Calculate the root location of the compiler
-		std::string cxxCompilerLocation = mf->GetDefinition("CMAKE_CXX_COMPILER") ?
-			mf->GetSafeDefinition("CMAKE_CXX_COMPILER") :
-			mf->GetSafeDefinition("CMAKE_C_COMPILER");
-		if (cxxCompilerLocation.empty())
+		// Detect each language used in the definitions
+		std::set<std::string> languages;
+		for (TargetContextMap::iterator iter = context.targetContexts.begin();
+			iter != context.targetContexts.end(); ++iter)
 		{
-			return false;
+			TargetGenerationContext& targetContext = iter->second;
+			Detection::DetectLanguages(languages, context.self,
+				targetContext.lg, *targetContext.target);
 		}
 
-		// Strip out the path to the compiler
-		std::string cxxCompilerPath = 
-			cmSystemTools::GetFilenamePath( cxxCompilerLocation );
-		std::string cxxCompilerFile = "$CompilerRoot$\\" +
-			cmSystemTools::GetFilenameName( cxxCompilerLocation );
+		// Now output a compiler for each of these languages
+		for (std::set<std::string>::iterator iter = languages.begin();
+			iter != languages.end();
+			++iter)
+		{
+			const std::string & language = *iter;
 
-		cmSystemTools::ConvertToOutputSlashes( cxxCompilerPath );
-		cmSystemTools::ConvertToOutputSlashes( cxxCompilerFile );
+			// Calculate the root location of the compiler
+			std::string variableString = "CMAKE_"+language+"_COMPILER";
+			std::string compilerLocation = mf->GetSafeDefinition(variableString);
+			if (compilerLocation.empty())
+			{
+				return false;
+			}
 
-		// Write out the compiler that has been configured
-		context.fc.WriteVariable("CompilerRoot", Quote(cxxCompilerPath));
+			// Strip out the path to the compiler
+			std::string compilerPath = 
+				cmSystemTools::GetFilenamePath( compilerLocation );
+			std::string compilerFile = "$CompilerRoot$\\" +
+				cmSystemTools::GetFilenameName( compilerLocation );
 
-		context.fc.WriteCommand("Compiler", "'Compiler-default'");
-		context.fc.WritePushScope();
-		context.fc.WriteVariable("Executable", Quote(cxxCompilerFile));
-		context.fc.WritePopScope();
+			cmSystemTools::ConvertToOutputSlashes( compilerPath );
+			cmSystemTools::ConvertToOutputSlashes( compilerFile );
+
+			std::string compilerName = "Compiler-" + language;
+			// Write out the compiler that has been configured
+			context.fc.WriteCommand("Compiler", Quote(compilerName));
+			context.fc.WritePushScope();
+			context.fc.WriteVariable("CompilerRoot", Quote(compilerPath));
+			context.fc.WriteVariable("Executable", Quote(compilerFile));
+			context.fc.WritePopScope();
+		}
 
 		return true;
 	}
@@ -1263,7 +1281,6 @@ public:
 
 		context.fc.WriteVariable("ConfigBase", "");
 		context.fc.WritePushScopeStruct();
-		context.fc.WriteVariable("Compiler", "'Compiler-default'");
 		context.fc.WritePopScope();
 
 		// Iterate over all configurations and define them:
@@ -1388,7 +1405,7 @@ public:
 		// Figure out the list of languages in use by this object
 		std::vector<std::string> objectGroups;
 		std::set<std::string> languages;
-		Detection::DetectLanguages(languages, context.self, lg, gt, target);
+		Detection::DetectLanguages(languages, context.self, lg, target);
 
 		// Write the object list definitions for each language
 		// stored in this target
@@ -1475,7 +1492,9 @@ public:
 					Detection::SplitExecutableAndFlags(compileCmd, executable, flags);
 
 					context.fc.WriteVariable("CompilerCmdBaseFlags", Quote(flags));
-					context.fc.WriteVariable("Compiler", "'Compiler-default'");
+
+					std::string compilerName = "Compiler-" + objectGroupLanguage;
+					context.fc.WriteVariable("Compiler", Quote(compilerName));
 				}
 
 				// Iterate over all subObjectGroups
@@ -1501,7 +1520,7 @@ public:
 
 					context.fc.WriteVariable("CompileDefineFlags", Quote( command.defines ));
 					context.fc.WriteVariable("CompileFlags", Quote( command.flags ));
-					context.fc.WriteVariable("CompilerOptions", Quote("$CompilerCmdBaseFlags$ $CompileFlags$ $CompileDefineFlags$"));
+					context.fc.WriteVariable("CompilerOptions", Quote("$CompileFlags$ $CompileDefineFlags$ $CompilerCmdBaseFlags$"));
 
 					context.fc.WritePopScope();
 
