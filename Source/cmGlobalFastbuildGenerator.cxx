@@ -809,6 +809,34 @@ public:
 		std::copy(deps.begin(), deps.end(), std::back_inserter(dependencies));
 	}
 
+	static void DetectTargetObjectDependencies(
+		cmGlobalFastbuildGenerator* gg,
+		cmTarget& target, 
+		const std::string& configName,
+		std::vector<std::string>& dependencies)
+	{
+		// Iterate over all source files and look for 
+		// object file dependencies
+		cmGeneratorTarget *gt = gg->GetGeneratorTarget(&target);
+
+		std::set<std::string> objectLibs;
+
+		std::vector<cmSourceFile*> sourceFiles;
+		gt->GetSourceFiles(sourceFiles, configName);
+		for (std::vector<cmSourceFile*>::const_iterator
+			i = sourceFiles.begin(); i != sourceFiles.end(); ++i)
+		{
+			const std::string& objectLib = (*i)->GetObjectLibrary();
+			if (!objectLib.empty())
+			{
+				objectLibs.insert(objectLib + "-" + configName);
+			}
+		}
+
+		std::copy(objectLibs.begin(), objectLibs.end(),
+			std::back_inserter(dependencies) );
+	}
+
 	struct TargetCompare
 	{
 		bool operator()(cmTarget const* l, cmTarget const* r) const
@@ -1660,7 +1688,8 @@ public:
 					{
 						std::vector<std::string> dependencies;
 						Detection::DetectTargetLinkDependencies( context.self, target, configName, dependencies );
-					
+						Detection::DetectTargetObjectDependencies( context.self, target, configName, dependencies );
+
 						context.fc.WriteArray("Libraries", dependencies,
 							"'", "'", "+");
 					}
