@@ -40,7 +40,6 @@
 
 	77% tests passed, 84 tests failed out of 372
 	33 - CompileFeatures (Failed)
-	35 - VSResource (Failed)
 	39 - COnly (Failed)
 	40 - CxxOnly (Failed)
 	41 - CxxSubdirC (Failed)
@@ -1235,6 +1234,12 @@ public:
 			iter != context.targetContexts.end(); ++iter)
 		{
 			TargetGenerationContext& targetContext = iter->second;
+
+			if (targetContext.target->GetType() == cmTarget::INTERFACE_LIBRARY)
+			{
+				continue;
+			}
+
 			Detection::DetectLanguages(languages, context.self,
 				targetContext.lg, *targetContext.target);
 		}
@@ -1375,9 +1380,28 @@ public:
 				context.fc.WriteVariable("TargetNameSO", Quote(targetNames.targetNameSO));
 				context.fc.WriteVariable("TargetNameReal", Quote(targetNames.targetNameReal));
 
-				std::string targetOutDir = target.GetDirectory(configName) + "/";
+				std::string targetOutDir;
+				if (target.HaveWellDefinedOutputFiles())
+				{
+					targetOutDir = target.GetDirectory(configName) + "/";
+				}
+				else
+				{
+					targetOutDir = target.GetMakefile()->GetStartOutputDirectory();
+					if (targetOutDir.empty() || targetOutDir == ".")
+					{
+						targetOutDir = target.GetName();
+					}
+					else 
+					{
+						targetOutDir += "/";
+						targetOutDir += target.GetName();
+					}
+					targetOutDir += "/";
+					targetOutDir += configName;
+					targetOutDir += "/";
+				}
 				cmSystemTools::ConvertToOutputSlashes(targetOutDir);
-
 				context.fc.WriteVariable("TargetOutDir", Quote(targetOutDir));
 
 				if (target.GetType() != cmTarget::OBJECT_LIBRARY)
@@ -1543,93 +1567,102 @@ public:
 			iter != context.self->Configurations.end(); ++iter)
 		{
 			std::string configName = *iter;
+
 			std::string linkRuleName = targetName + "-" + configName + "-link";
 
-			context.fc.WriteVariable("LinkerConfig_" + configName, "");
-			context.fc.WritePushScopeStruct();
-
-			context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
-
-			context.fc.WriteBlankLine();
-			context.fc.WriteComment("Linker options:");
-			// Linker options
+			// Object libraries do not have linker stages
+			if (target.GetType() != cmTarget::OBJECT_LIBRARY)
 			{
-				std::string linkLibs;
-				std::string targetFlags;
-				std::string linkFlags;
-				std::string frameworkPath;
-				std::string linkPath;
 
-				lg->GetTargetFlags(
-					linkLibs,
-					targetFlags,
-					linkFlags,
-					frameworkPath,
-					linkPath,
-					gt,
-					false);
+				context.fc.WriteVariable("LinkerConfig_" + configName, "");
+				context.fc.WritePushScopeStruct();
 
-				context.fc.WriteVariable("LinkLibs", "'" + linkLibs + "'");
-				context.fc.WriteVariable("LinkFlags", "'" + linkFlags + "'");
+				context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
 
-				// Remove the command from the front and leave the flags behind
-				std::string linkCmd;
-				Detection::DetectBaseLinkerCommand(linkCmd,
-					lg, target, gt, configName);
-
-				std::string executable;
-				std::string flags;
-				Detection::SplitExecutableAndFlags(linkCmd, executable, flags);
-
-				context.fc.WriteVariable("Linker", Quote(executable));
-				context.fc.WriteVariable("BaseLinkerOptions", Quote(flags));
-
-				context.fc.WriteVariable("LibrarianOutput", "'$TargetOutDir$$TargetNameOut$'");
-				context.fc.WriteVariable("LinkerOutput", "'$TargetOutDir$$TargetNameOut$'");
-				context.fc.WriteVariable("LinkerOptions", "'$BaseLinkerOptions$ $LinkLibs$'");
-
-				context.fc.WriteArray("Libraries", objectGroups, "'" + targetName + "-", "-" + configName + "'");
-
-				// Now detect the extra dependencies for linking
+				context.fc.WriteBlankLine();
+				context.fc.WriteComment("Linker options:");
+				// Linker options
 				{
-					std::vector<std::string> dependencies;
-					Detection::DetectTargetLinkDependencies( context.self, target, configName, dependencies );
+					std::string linkLibs;
+					std::string targetFlags;
+					std::string linkFlags;
+					std::string frameworkPath;
+					std::string linkPath;
+
+					lg->GetTargetFlags(
+						linkLibs,
+						targetFlags,
+						linkFlags,
+						frameworkPath,
+						linkPath,
+						gt,
+						false);
+
+					context.fc.WriteVariable("LinkLibs", "'" + linkLibs + "'");
+					context.fc.WriteVariable("LinkFlags", "'" + linkFlags + "'");
+
+					// Remove the command from the front and leave the flags behind
+					std::string linkCmd;
+					Detection::DetectBaseLinkerCommand(linkCmd,
+						lg, target, gt, configName);
+
+					std::string executable;
+					std::string flags;
+					Detection::SplitExecutableAndFlags(linkCmd, executable, flags);
+
+					context.fc.WriteVariable("Linker", Quote(executable));
+					context.fc.WriteVariable("BaseLinkerOptions", Quote(flags));
+
+					context.fc.WriteVariable("LibrarianOutput", "'$TargetOutDir$$TargetNameOut$'");
+					context.fc.WriteVariable("LinkerOutput", "'$TargetOutDir$$TargetNameOut$'");
+					context.fc.WriteVariable("LinkerOptions", "'$BaseLinkerOptions$ $LinkLibs$'");
+
+					context.fc.WriteArray("Libraries", objectGroups, "'" + targetName + "-", "-" + configName + "'");
+
+					// Now detect the extra dependencies for linking
+					{
+						std::vector<std::string> dependencies;
+						Detection::DetectTargetLinkDependencies( context.self, target, configName, dependencies );
 					
-					context.fc.WriteArray("Libraries", dependencies,
-						"'", "'", "+");
-				}
+						context.fc.WriteArray("Libraries", dependencies,
+							"'", "'", "+");
+					}
 				
-				context.fc.WriteCommand(linkCommand, Quote(linkRuleName));
-				context.fc.WritePushScope();
-				if (linkCommand == "Library")
-				{
-					context.fc.WriteComment("Convert the linker options to work with libraries");
+					context.fc.WriteCommand(linkCommand, Quote(linkRuleName));
+					context.fc.WritePushScope();
+					if (linkCommand == "Library")
+					{
+						context.fc.WriteComment("Convert the linker options to work with libraries");
 
-					// Push dummy definitions for compilation variables
-					// These variables are required by the Library command
-					context.fc.WriteVariable("Compiler", "'Compiler-default'");
-					context.fc.WriteVariable("CompilerOptions", "'%1 %2'");
-					context.fc.WriteVariable("CompilerOutputPath", "'/dummy/'");
+						// Push dummy definitions for compilation variables
+						// These variables are required by the Library command
+						context.fc.WriteVariable("Compiler", "'Compiler-default'");
+						context.fc.WriteVariable("CompilerOptions", "'%1 %2'");
+						context.fc.WriteVariable("CompilerOutputPath", "'/dummy/'");
 					
-					// These variables are required by the Library command as well
-					// we just need to transfer the values in the linker variables
-					// to these locations
-					context.fc.WriteVariable("Librarian","'$Linker$'");
-					context.fc.WriteVariable("LibrarianOptions","'$LinkerOptions$'");
-					context.fc.WriteVariable("LibrarianOutput","'$LinkerOutput$'");
+						// These variables are required by the Library command as well
+						// we just need to transfer the values in the linker variables
+						// to these locations
+						context.fc.WriteVariable("Librarian","'$Linker$'");
+						context.fc.WriteVariable("LibrarianOptions","'$LinkerOptions$'");
+						context.fc.WriteVariable("LibrarianOutput","'$LinkerOutput$'");
 
-					context.fc.WriteVariable("LibrarianAdditionalInputs", ".Libraries");
+						context.fc.WriteVariable("LibrarianAdditionalInputs", ".Libraries");
+					}
+					context.fc.WritePopScope();
 				}
 				context.fc.WritePopScope();
 			}
-
-			context.fc.WritePopScope();
 
 			// Output a list of aliases
 			context.fc.WriteCommand("Alias", Quote(targetName + "-" + configName));
 			context.fc.WritePushScope();
 			context.fc.WriteArray("Targets", objectGroups, "'" + targetName + "-", "-" + configName + "'");
-			context.fc.WriteVariable("Targets", "{'" + linkRuleName + "'}", "+");
+
+			if (target.GetType() != cmTarget::OBJECT_LIBRARY)
+			{
+				context.fc.WriteVariable("Targets", "{'" + linkRuleName + "'}", "+");
+			}
 			context.fc.WritePopScope();
 		}
 
