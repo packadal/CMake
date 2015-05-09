@@ -39,7 +39,6 @@
   Current list of unit tests failing:
 
 	77% tests passed, 84 tests failed out of 372
-	39 - COnly (Failed)
 	40 - CxxOnly (Failed)
 	41 - CxxSubdirC (Failed)
 	42 - IPO (Failed)
@@ -1348,9 +1347,8 @@ public:
 		std::string targetName = target.GetName();
 		cmGeneratorTarget *gt = context.self->GetGeneratorTarget(&target);
 
-		std::string ruleTargetName = "TargetDef_" + targetName;
-		context.fc.WriteVariable(ruleTargetName, "");
-		context.fc.WritePushScopeStruct();
+		context.fc.WriteComment("Target definition: "+targetName);
+		context.fc.WritePushScope();
 
 		// Iterate over each configuration
 		// This time to define linker settings for each config
