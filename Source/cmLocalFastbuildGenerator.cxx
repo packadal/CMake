@@ -23,7 +23,7 @@ cmLocalFastbuildGenerator::cmLocalFastbuildGenerator()
 #ifdef _WIN32
   this->WindowsShell = true;
 #endif
-  this->TargetImplib = "$TargetNameImport$";
+  this->TargetImplib = "$TargetOutDir$$TargetNameImport$";
 }
 
 //----------------------------------------------------------------------------

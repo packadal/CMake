@@ -39,7 +39,6 @@
   Current list of unit tests failing:
 
 	77% tests passed, 84 tests failed out of 372
-	33 - CompileFeatures (Failed)
 	39 - COnly (Failed)
 	40 - CxxOnly (Failed)
 	41 - CxxSubdirC (Failed)
@@ -540,7 +539,7 @@ public:
 		vars.Target = "%2";
 
 		vars.TargetSOName = "$TargetOutSO$";
-		vars.TargetPDB = "$TargetNamePDB$";
+		vars.TargetPDB = "$TargetOutDir$$TargetNamePDB$";
 
 		// Setup the target version.
 		std::string targetVersionMajor;
