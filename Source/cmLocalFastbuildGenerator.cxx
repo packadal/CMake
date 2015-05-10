@@ -72,3 +72,17 @@ void cmLocalFastbuildGenerator::ComputeObjectFilenames(
 }
 
 //----------------------------------------------------------------------------
+std::string cmLocalFastbuildGenerator::GetTargetDirectory(
+	cmTarget const& target) const
+{
+	std::string dir = cmake::GetCMakeFilesDirectoryPostSlash();
+	dir += target.GetName();
+#if defined(__VMS)
+	dir += "_dir";
+#else
+	dir += ".dir";
+#endif
+	return dir;
+}
+
+//----------------------------------------------------------------------------

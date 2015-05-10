@@ -44,6 +44,8 @@ public:
 	virtual void ComputeObjectFilenames(
 		std::map<cmSourceFile const*, std::string>& mapping,
 		cmGeneratorTarget const* gt);
+	virtual std::string GetTargetDirectory(
+		cmTarget const& target) const;
 
 };
 

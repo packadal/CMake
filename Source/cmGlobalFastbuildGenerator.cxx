@@ -839,6 +839,15 @@ public:
 		std::copy(deps.begin(), deps.end(), std::back_inserter(dependencies));
 	}
 
+	static std::string DetectTargetCompileOutputDir(
+		cmLocalFastbuildGenerator* lg,
+		const cmTarget& target)
+	{
+		std::string result = lg->GetTargetDirectory(target) + "/";
+		cmSystemTools::ConvertToOutputSlashes(result);
+		return result;
+	}
+
 	static void DetectTargetObjectDependencies(
 		cmGlobalFastbuildGenerator* gg,
 		cmTarget& target, 
@@ -1576,7 +1585,9 @@ public:
 				context.fc.WriteComment("Compiler options:");
 				{
 					// Tie together the variables
-					context.fc.WriteVariable("CompilerOutputPath", "'$TargetOutDir$'");
+					std::string targetCompileOutDirectory = 
+						Detection::DetectTargetCompileOutputDir(lg, target);
+					context.fc.WriteVariable("CompilerOutputPath", Quote(targetCompileOutDirectory));
 
 					std::string compileObjectCmd = Detection::DetectCompileRule(lg, target, objectGroupLanguage);
 					//context.fc.WriteVariable("CompilerRuleCmd", Quote( compileObjectCmd ));
