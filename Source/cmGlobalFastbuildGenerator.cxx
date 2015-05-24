@@ -47,8 +47,6 @@
 	58 - SourceGroups (Failed)
 	59 - Preprocess (Failed)
 	63 - EmptyLibrary (Failed)
-	64 - CompileDefinitions (Failed)
-	65 - CompileOptions (Failed)
 	67 - AliasTarget (Failed)
 	69 - InterfaceLibrary (Failed)
 	70 - ConfigSources (Failed)
@@ -868,7 +866,12 @@ public:
 			const std::string& objectLib = (*i)->GetObjectLibrary();
 			if (!objectLib.empty())
 			{
-				objectLibs.insert(objectLib + "-" + configName);
+				// Find the target this actually is (might be an alias)
+				const cmTarget* objectTarget = gg->FindTarget(objectLib);
+				if (objectTarget)
+				{
+					objectLibs.insert(objectTarget->GetName() + "-" + configName);
+				}
 			}
 		}
 
