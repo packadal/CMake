@@ -542,13 +542,19 @@ public:
 		return definesString;
 	}
 
-	static void DetectBaseLinkerCommand(std::string & command,
+	static bool DetectBaseLinkerCommand(std::string & command,
 		cmLocalFastbuildGenerator *lg,
 		cmTarget &target,
 		cmGeneratorTarget *gt,
 		const std::string & configName)
 	{
 		const std::string& linkLanguage = target.GetLinkerLanguage(configName);
+		if (linkLanguage.empty()) {
+			cmSystemTools::Error("CMake can not determine linker language for "
+				"target: ",
+				target.GetName().c_str());
+			return false;
+		}
 
 		cmTarget::TargetType targetType = target.GetType();
 
@@ -599,6 +605,8 @@ public:
 		}
 		
 		command = BuildCommandLine(linkCmds);
+
+		return true;
 	}
 
 	static void SplitExecutableAndFlags(const std::string & command,
@@ -1240,7 +1248,8 @@ public:
 		// Calculate filename
 		std::string fname = root->GetMakefile()->GetStartOutputDirectory();
 		fname += "/";
-		fname += root->GetMakefile()->GetProjectName();
+		//fname += root->GetMakefile()->GetProjectName();
+		fname += "fbuild";
 		fname += ".bff";
 		
 		// Open file
@@ -1660,6 +1669,10 @@ public:
 			context.fc.WritePopScope();
 		}
 
+		// Object libraries do not have linker stages
+		bool hasLinkerStage = 
+			target.GetType() != cmTarget::OBJECT_LIBRARY;
+
 		// Iterate over each configuration
 		// This time to define linker settings for each config
 		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
@@ -1669,8 +1682,7 @@ public:
 
 			std::string linkRuleName = targetName + "-" + configName + "-link";
 
-			// Object libraries do not have linker stages
-			if (target.GetType() != cmTarget::OBJECT_LIBRARY)
+			if (hasLinkerStage)
 			{
 
 				context.fc.WriteVariable("LinkerConfig_" + configName, "");
@@ -1702,8 +1714,11 @@ public:
 
 					// Remove the command from the front and leave the flags behind
 					std::string linkCmd;
-					Detection::DetectBaseLinkerCommand(linkCmd,
-						lg, target, gt, configName);
+					if (!Detection::DetectBaseLinkerCommand(linkCmd,
+						lg, target, gt, configName))
+					{
+						return;
+					}
 
 					std::string executable;
 					std::string flags;
@@ -1758,7 +1773,7 @@ public:
 			context.fc.WritePushScope();
 			context.fc.WriteArray("Targets", objectGroups, "'" + targetName + "-", "-" + configName + "'");
 
-			if (target.GetType() != cmTarget::OBJECT_LIBRARY)
+			if (hasLinkerStage)
 			{
 				context.fc.WriteVariable("Targets", "{'" + linkRuleName + "'}", "+");
 			}
@@ -1995,8 +2010,11 @@ void cmGlobalFastbuildGenerator::GenerateBuildCommand(
 	
 	// Push in the make options
 	makeCommand.insert(makeCommand.end(), makeOptionsSelected.begin(), makeOptionsSelected.end());
+
+	/*
 	makeCommand.push_back("-config");
 	makeCommand.push_back(projectName + ".bff");
+	*/
 
 	makeCommand.push_back("-showcmds");
 	makeCommand.push_back("-ide");
