@@ -86,3 +86,22 @@ std::string cmLocalFastbuildGenerator::GetTargetDirectory(
 }
 
 //----------------------------------------------------------------------------
+std::string EncodeLiteral(const std::string &lit)
+{
+	std::string result = lit;
+	cmSystemTools::ReplaceString(result, "$", "^$");
+	return result;
+}
+
+//----------------------------------------------------------------------------
+void cmLocalFastbuildGenerator::AppendFlagEscape(std::string& flags,
+	const std::string& rawFlag)
+{
+	std::string escapedFlag = this->EscapeForShell(rawFlag);
+	// Other make systems will remove the double $ but
+	// fastbuild uses ^$ to escape it. So switch to that.
+	cmSystemTools::ReplaceString(escapedFlag, "$$", "^$");
+	this->AppendFlags(flags, escapedFlag);
+}
+
+//----------------------------------------------------------------------------

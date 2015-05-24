@@ -46,6 +46,8 @@ public:
 		cmGeneratorTarget const* gt);
 	virtual std::string GetTargetDirectory(
 		cmTarget const& target) const;
+	virtual void AppendFlagEscape(std::string& flags,
+		const std::string& rawFlag);
 
 };
 

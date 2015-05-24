@@ -25,13 +25,13 @@
 	 I think compilation is the part that gets distributed anyway.
 	 But it might mean that the cache has trouble calculating deps for obj->lib/exe. 
 	 Not sure if Fastbuild supports that anyway yet
-   - Multiple compilers for languages not supported yet. Hence everything is attempting to compile
-	 using the C++ compiler.
 
   Fastbuild bugs:
    - Defining prebuild dependencies that don't exist, causes the error output when that 
 	 target is actually defined. Rather than originally complaining that the target 
 	 doesn't exist where the reference is attempted.
+   - Parsing strings with double $$ doesn't generate a nice error
+   - Undocumented that you can escape a $ with ^$
 
   Limitations:
    - Only tested/working with MSVC
@@ -1161,6 +1161,13 @@ public:
 	static std::string Quote(const std::string& str, const std::string& quotation = "'")
 	{
 		return quotation + str + quotation;
+	}
+
+	static std::string EncodeLiteral(const std::string &lit)
+	{
+		std::string result = lit;
+		cmSystemTools::ReplaceString(result, "$", "^$");
+		return result;
 	}
 
 	static void EnsureDirectoryExists(const std::string& path,
