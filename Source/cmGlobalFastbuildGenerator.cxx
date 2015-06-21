@@ -32,9 +32,19 @@
 	 doesn't exist where the reference is attempted.
    - Parsing strings with double $$ doesn't generate a nice error
    - Undocumented that you can escape a $ with ^$
+   - ExecInputs is invalid empty
 
   Limitations:
    - Only tested/working with MSVC
+
+  Notes:
+   - Understanding Custom Build Steps and Build Events
+     https://msdn.microsoft.com/en-us/library/e85wte0k.aspx
+	 very useful documentation detailing the order of execution
+	 of standard MSVC events. This is useful to determine correct
+	 behaviour of fastbuild generator (view a project generated to MSVC,
+	 then apply the same rules/assumptions back into fastbuild). 
+	 i.e. Custom rules are always executed first.
 
   Current list of unit tests failing:
 
@@ -113,6 +123,7 @@
 #include "cmLocalGenerator.h"
 #include "cmComputeLinkInformation.h"
 #include "cmGlobalVisualStudioGenerator.h"
+#include "cmCustomCommandGenerator.h"
 #include <cmsys/Encoding.hxx>
 #include <assert.h>
 
@@ -233,7 +244,6 @@ public:
 
 	void WriteArray(const std::string& key,
 		const std::vector<std::string>& values,
-		const std::string& prefix, const std::string& suffix,
 		const std::string& operation = "=")
 	{
 		WriteVariable(key, "", operation);
@@ -244,7 +254,7 @@ public:
 			const std::string & value = values[index];
 			bool isLast = index == size - 1;
 
-			fout << linePrefix << prefix << value << suffix;
+			fout << linePrefix << value;
 			if (!isLast)
 			{
 				fout << ',';
@@ -696,7 +706,6 @@ public:
 
 	static void DetectLanguages(std::set<std::string> & languages,
 		cmGlobalFastbuildGenerator * self,
-		cmLocalFastbuildGenerator *lg,
 		cmTarget &target)
 	{
 		cmGeneratorTarget *gt = self->GetGeneratorTarget(&target);
@@ -1174,6 +1183,45 @@ public:
 		return quotation + str + quotation;
 	}
 
+	static std::string Join(const std::vector<std::string>& elems, 
+		const std::string& delim)
+	{
+		std::stringstream stringstream;
+		for (std::vector<std::string>::const_iterator iter = elems.begin(); 
+			iter != elems.end(); ++iter)
+		{
+			stringstream << (*iter);
+			if (iter + 1 != elems.end()) {
+				stringstream << delim;
+			}
+		}
+
+		return stringstream.str();
+	}
+
+	static std::vector<std::string> Wrap(const std::vector<std::string>& in, const std::string& prefix = "'", const std::string& suffix = "'")
+	{
+		std::vector<std::string> result;
+
+		struct WrapHelper
+		{
+			std::string m_prefix;
+			std::string m_suffix;
+
+			std::string operator()(const std::string& in)
+			{
+				return m_prefix + in + m_suffix;
+			}
+		};
+
+		WrapHelper helper = {prefix, suffix};
+
+		std::transform(in.begin(), in.end(),
+			std::back_inserter(result), helper);
+
+		return result;
+	}
+
 	static std::string EncodeLiteral(const std::string &lit)
 	{
 		std::string result = lit;
@@ -1324,7 +1372,7 @@ public:
 			}
 
 			Detection::DetectLanguages(languages, context.self,
-				targetContext.lg, *targetContext.target);
+				*targetContext.target);
 		}
 
 		// Now output a compiler for each of these languages
@@ -1427,8 +1475,132 @@ public:
 		}
 
 		// Write out a list of all configs
-		context.fc.WriteArray("all_configs", context.self->Configurations,
-			".config_", "");
+		context.fc.WriteArray("all_configs", 
+			Wrap(context.self->Configurations, ".config_", ""));
+	}
+
+	static std::string MakeCustomLauncher(
+		cmLocalFastbuildGenerator *lg,
+		cmCustomCommandGenerator const& ccg)
+	{
+		const char* property = "RULE_LAUNCH_CUSTOM";
+		const char* property_value = lg->GetMakefile()->GetProperty(property);
+
+		if (!property_value || !*property_value)
+		{
+			return std::string();
+		}
+
+		// Expand rules in the empty string.  It may insert the launcher and
+		// perform replacements.
+		cmLocalGenerator::RuleVariables vars;
+		vars.RuleLauncher = property;
+		std::string output;
+		const std::vector<std::string>& outputs = ccg.GetOutputs();
+		if (!outputs.empty())
+		{
+			cmLocalGenerator::RelativeRoot relative_root =
+				ccg.GetWorkingDirectory().empty() ? cmLocalGenerator::START_OUTPUT : cmLocalGenerator::NONE;
+
+			output = lg->Convert(outputs[0], relative_root, cmLocalGenerator::SHELL);
+		}
+		vars.Output = output.c_str();
+
+		std::string launcher;
+		lg->ExpandRuleVariables(launcher, vars);
+		if (!launcher.empty())
+		{
+			launcher += " ";
+		}
+
+		return launcher;
+	}
+
+	static void WriteCustomCommand(
+		GenerationContext& context,
+		const cmSourceFile* sourceFile,
+		cmLocalFastbuildGenerator *lg,
+		const std::string& configName,
+		const std::string& targetName)
+	{
+		cmMakefile* makefile = lg->GetMakefile();
+
+		const cmCustomCommand* cc = sourceFile->GetCustomCommand();
+		cmCustomCommandGenerator ccg(*cc, configName, makefile);
+
+		const std::vector<std::string> &outputs = ccg.GetOutputs();
+		const std::vector<std::string> &byproducts = ccg.GetByproducts();
+		std::vector<std::string> mergedOutputs;
+		mergedOutputs.insert(mergedOutputs.end(), outputs.begin(), outputs.end());
+		mergedOutputs.insert(mergedOutputs.end(), byproducts.begin(), byproducts.end());
+		std::vector<std::string> inputs;
+
+		std::vector<std::string> cmdLines;
+
+		if (ccg.GetNumberOfCommands() > 0) 
+		{
+			std::string wd = ccg.GetWorkingDirectory();
+			if (wd.empty())
+			{
+				wd = makefile->GetStartOutputDirectory();
+			}
+		
+			std::ostringstream cdCmd;
+#ifdef _WIN32
+			std::string cdStr = "cd /D ";
+#else
+			std::string cdStr = "cd ";
+#endif
+			cdCmd << cdStr << lg->ConvertToOutputFormat(wd, cmLocalGenerator::SHELL);
+			cmdLines.push_back(cdCmd.str());
+		}
+
+		std::string launcher = MakeCustomLauncher(lg, ccg);
+
+		for (unsigned i = 0; i != ccg.GetNumberOfCommands(); ++i) 
+		{
+			cmdLines.push_back(launcher +
+				lg->ConvertToOutputFormat(ccg.GetCommand(i), cmLocalGenerator::SHELL));
+
+			std::string& cmd = cmdLines.back();
+			ccg.AppendArguments(i, cmd);
+		}
+
+		std::string cmd = Detection::BuildCommandLine(cmdLines);
+		std::string executable;
+		std::string args;
+		Detection::SplitExecutableAndFlags(cmd, executable, args);
+
+		// Write out an exec command
+		/*
+		Exec(alias); (optional)Alias
+		{
+			.ExecExecutable; Executable to run
+			.ExecInput; Input file to pass to executable
+			.ExecOutput; Output file generated by executable
+			.ExecArguments; (optional)Arguments to pass to executable
+			.ExecWorkingDir; (optional)Working dir to set for executable
+
+			; Additional options
+			.PreBuildDependencies; (optional)Force targets to be built before this Exec(Rarely needed,
+			; but useful when Exec relies on externally generated files).
+		}
+		*/
+		
+		context.fc.WriteCommand("Exec", Quote(targetName));
+		context.fc.WritePushScope();
+		{
+			context.fc.WriteVariable("ExecExecutable", Quote(executable));
+			context.fc.WriteVariable("ExecArguments", Quote(args));
+			if (inputs.empty())
+			{
+				inputs.push_back("dummy");
+			}
+			context.fc.WriteVariable("ExecInput", Quote(Join(inputs, ",")));
+			context.fc.WriteVariable("ExecOutput", Quote(Join(mergedOutputs, ",")));
+			
+		}
+		context.fc.WritePopScope();
 	}
 
 	static void WriteTargetDefinition(GenerationContext& context,
@@ -1525,17 +1697,73 @@ public:
 				std::vector<std::string> dependencies;
 				Detection::DetectTargetCompileDependencies( context.self, target, dependencies );
 
-				context.fc.WriteArray("PreBuildDependencies", dependencies,
-					"'", "-"+configName+"'");
+				context.fc.WriteArray("PreBuildDependencies", 
+					Wrap(dependencies, "'", "-"+configName+"'"));
 			}
 
 			context.fc.WritePopScope();
 		}
 
-		// Figure out the list of languages in use by this object
+		// Iterating over all configurations
+		const char* customCommandGroupNamePrefix = "ObjectGroup_cmCustomCommands_";
+		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
+			iter != context.self->Configurations.end(); ++iter)
+		{
+			std::string configName = *iter;
+		
+			context.fc.WriteVariable("CustomCommands_" + configName, "");
+			context.fc.WritePushScopeStruct();
+
+			context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
+
+			// Figure out the list of custom build rules in use by this target
+			// get a list of source files
+			std::vector<cmSourceFile const*> customCommands;
+			gt->GetCustomCommands(customCommands, configName);
+
+			if (!customCommands.empty())
+			{
+				std::vector<std::string> customCommandTargets;
+
+				// Write the custom command build rules for each configuration
+				int commandCount = 1;
+				std::string customCommandNameBase = targetName + "-" + configName + "-CustomCommand-";
+				for (std::vector<cmSourceFile const*>::iterator ccIter = customCommands.begin();
+					ccIter != customCommands.end(); ++ccIter)
+				{
+					const cmSourceFile* sourceFile = *ccIter;
+
+					std::stringstream customCommandTargetName;
+					customCommandTargetName << customCommandNameBase << (commandCount++);
+					customCommandTargets.push_back(customCommandTargetName.str());
+
+					WriteCustomCommand(context, sourceFile, lg, configName, customCommandTargetName.str());
+				}
+
+				std::string customCommandGroupName = customCommandGroupNamePrefix + configName;
+
+				// Write an alias for this object group to group them all together
+				context.fc.WriteCommand("Alias", Quote(customCommandGroupName));
+				context.fc.WritePushScope();
+				context.fc.WriteArray("Targets",
+					Wrap(customCommandTargets, "'", "'"));
+				context.fc.WritePopScope();
+
+				// Now make everything use this as prebuilt dependencies
+				std::vector<std::string> tmp;
+				tmp.push_back(customCommandGroupName);
+				context.fc.WriteArray("PreBuildDependencies",
+					Wrap(tmp),
+					"+");
+			}
+
+			context.fc.WritePopScope();
+		}
+		
+		// Figure out the list of languages in use by this target
 		std::vector<std::string> objectGroups;
 		std::set<std::string> languages;
-		Detection::DetectLanguages(languages, context.self, lg, target);
+		Detection::DetectLanguages(languages, context.self, target);
 
 		// Write the object list definitions for each language
 		// stored in this target
@@ -1558,6 +1786,7 @@ public:
 				context.fc.WritePushScopeStruct();
 
 				context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
+				context.fc.WriteCommand("Using", ".CustomCommands_" + configName);
 
 				struct CompileCommand
 				{
@@ -1645,7 +1874,8 @@ public:
 					context.fc.WriteCommand("ObjectList", Quote(ruleName.str()));
 					context.fc.WritePushScope();
 
-					context.fc.WriteArray("CompilerInputFiles", command.sourceFiles, "'", "'");
+					context.fc.WriteArray("CompilerInputFiles", 
+						Wrap(command.sourceFiles, "'", "'"));
 
 					// Unity source files:
 					context.fc.WriteVariable("UnityInputFiles", ".CompilerInputFiles");
@@ -1661,7 +1891,8 @@ public:
 				// Write an alias for this object group to group them all together
 				context.fc.WriteCommand("Alias", Quote(objectGroupRuleName));
 				context.fc.WritePushScope();
-				context.fc.WriteArray("Targets", configObjectGroups, "'", "'");
+				context.fc.WriteArray("Targets", 
+					Wrap(configObjectGroups, "'", "'"));
 				context.fc.WritePopScope();
 
 				context.fc.WritePopScope();
@@ -1730,7 +1961,8 @@ public:
 					context.fc.WriteVariable("LinkerOutput", "'$TargetOutput$'");
 					context.fc.WriteVariable("LinkerOptions", "'$BaseLinkerOptions$ $LinkLibs$'");
 
-					context.fc.WriteArray("Libraries", objectGroups, "'" + targetName + "-", "-" + configName + "'");
+					context.fc.WriteArray("Libraries", 
+						Wrap(objectGroups, "'" + targetName + "-", "-" + configName + "'"));
 
 					// Now detect the extra dependencies for linking
 					{
@@ -1738,8 +1970,9 @@ public:
 						Detection::DetectTargetLinkDependencies( context.self, target, configName, dependencies );
 						Detection::DetectTargetObjectDependencies( context.self, target, configName, dependencies );
 
-						context.fc.WriteArray("Libraries", dependencies,
-							"'", "'", "+");
+						context.fc.WriteArray("Libraries", 
+							Wrap(dependencies, "'", "'"), 
+							"+");
 					}
 				
 					context.fc.WriteCommand(linkCommand, Quote(linkRuleName));
@@ -1771,7 +2004,8 @@ public:
 			// Output a list of aliases
 			context.fc.WriteCommand("Alias", Quote(targetName + "-" + configName));
 			context.fc.WritePushScope();
-			context.fc.WriteArray("Targets", objectGroups, "'" + targetName + "-", "-" + configName + "'");
+			context.fc.WriteArray("Targets", 
+				Wrap(objectGroups, "'" + targetName + "-", "-" + configName + "'"));
 
 			if (hasLinkerStage)
 			{
@@ -1882,7 +2116,8 @@ public:
 
 			context.fc.WriteCommand("Alias", "'" + configName + "'");
 			context.fc.WritePushScope();
-			context.fc.WriteArray("Targets", targets, "'", "'");
+			context.fc.WriteArray("Targets", 
+				Wrap(targets, "'", "'"));
 			context.fc.WritePopScope();
 		}
 
@@ -1895,14 +2130,16 @@ public:
 
 			context.fc.WriteCommand("Alias", "'" + targetName + "'");
 			context.fc.WritePushScope();
-			context.fc.WriteArray("Targets", targets, "'", "'");
+			context.fc.WriteArray("Targets", 
+				Wrap(targets, "'", "'"));
 			context.fc.WritePopScope();
 		}
 
 		context.fc.WriteComment("All");
 		context.fc.WriteCommand("Alias", "'All'");
 		context.fc.WritePushScope();
-		context.fc.WriteArray("Targets", context.self->Configurations, "'", "'");
+		context.fc.WriteArray("Targets", 
+			Wrap(context.self->Configurations, "'", "'"));
 		context.fc.WritePopScope();
 	}
 };
