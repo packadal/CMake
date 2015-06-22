@@ -25,7 +25,7 @@
 	 I think compilation is the part that gets distributed anyway.
 	 But it might mean that the cache has trouble calculating deps for obj->lib/exe. 
 	 Not sure if Fastbuild supports that anyway yet
-
+   
   Fastbuild bugs:
    - Defining prebuild dependencies that don't exist, causes the error output when that 
 	 target is actually defined. Rather than originally complaining that the target 
@@ -33,6 +33,7 @@
    - Parsing strings with double $$ doesn't generate a nice error
    - Undocumented that you can escape a $ with ^$
    - ExecInputs is invalid empty
+   - /c why does this need to be defined now?
 
   Limitations:
    - Only tested/working with MSVC
@@ -1882,7 +1883,7 @@ public:
 
 					context.fc.WriteVariable("CompileDefineFlags", Quote( command.defines ));
 					context.fc.WriteVariable("CompileFlags", Quote( command.flags ));
-					context.fc.WriteVariable("CompilerOptions", Quote("$CompileFlags$ $CompileDefineFlags$ $CompilerCmdBaseFlags$"));
+					context.fc.WriteVariable("CompilerOptions", Quote("/c $CompileFlags$ $CompileDefineFlags$ $CompilerCmdBaseFlags$"));
 
 					context.fc.WritePopScope();
 
@@ -1984,7 +1985,7 @@ public:
 						// Push dummy definitions for compilation variables
 						// These variables are required by the Library command
 						context.fc.WriteVariable("Compiler", ".Compiler_dummy");
-						context.fc.WriteVariable("CompilerOptions", "'%1 %2'");
+						context.fc.WriteVariable("CompilerOptions", "'/c %1 %2'");
 						context.fc.WriteVariable("CompilerOutputPath", "'/dummy/'");
 					
 						// These variables are required by the Library command as well
