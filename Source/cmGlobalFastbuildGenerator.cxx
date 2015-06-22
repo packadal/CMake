@@ -1883,7 +1883,7 @@ public:
 
 					context.fc.WriteVariable("CompileDefineFlags", Quote( command.defines ));
 					context.fc.WriteVariable("CompileFlags", Quote( command.flags ));
-					context.fc.WriteVariable("CompilerOptions", Quote("/c $CompileFlags$ $CompileDefineFlags$ $CompilerCmdBaseFlags$"));
+					context.fc.WriteVariable("CompilerOptions", Quote("$CompileFlags$ $CompileDefineFlags$ $CompilerCmdBaseFlags$"));
 
 					context.fc.WritePopScope();
 
@@ -1985,7 +1985,7 @@ public:
 						// Push dummy definitions for compilation variables
 						// These variables are required by the Library command
 						context.fc.WriteVariable("Compiler", ".Compiler_dummy");
-						context.fc.WriteVariable("CompilerOptions", "'/c %1 %2'");
+						context.fc.WriteVariable("CompilerOptions", "'-c %1 %2'");
 						context.fc.WriteVariable("CompilerOutputPath", "'/dummy/'");
 					
 						// These variables are required by the Library command as well
