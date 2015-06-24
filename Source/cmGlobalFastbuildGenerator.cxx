@@ -862,9 +862,14 @@ public:
 
 	static std::string DetectTargetCompileOutputDir(
 		cmLocalFastbuildGenerator* lg,
-		const cmTarget& target)
+		const cmTarget& target,
+		std::string configName)
 	{
 		std::string result = lg->GetTargetDirectory(target) + "/";
+		if (!configName.empty())
+		{
+			result = result + configName + "/";
+		}
 		cmSystemTools::ConvertToOutputSlashes(result);
 		return result;
 	}
@@ -1886,7 +1891,7 @@ public:
 				{
 					// Tie together the variables
 					std::string targetCompileOutDirectory = 
-						Detection::DetectTargetCompileOutputDir(lg, target);
+						Detection::DetectTargetCompileOutputDir(lg, target, configName);
 					context.fc.WriteVariable("CompilerOutputPath", Quote(targetCompileOutDirectory));
 
 					std::string compileObjectCmd = Detection::DetectCompileRule(lg, target, objectGroupLanguage);
