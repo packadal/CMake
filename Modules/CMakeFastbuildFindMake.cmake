@@ -13,6 +13,6 @@
 #  License text for the above reference.)
 
 find_program(CMAKE_MAKE_PROGRAM
-  NAMES fastbuild fbuild
-  DOC "Program used to build from fastbuild.bff files.")
+  NAMES fbuild
+  DOC "Program used to build from fastbuild .bff files.")
 mark_as_advanced(CMAKE_MAKE_PROGRAM)
