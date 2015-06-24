@@ -278,6 +278,11 @@ public:
 	static std::string BuildCommandLine(
 		const std::vector<std::string> &cmdLines)
 	{
+#ifdef _WIN32
+		const char * cmdExe = "cmd.exe";
+		std::string cmdExeAbsolutePath = cmSystemTools::FindProgram(cmdExe);
+#endif
+
 		// If we have no commands but we need to build a command anyway, use ":".
 		// This happens when building a POST_BUILD value for link targets that
 		// don't use POST_BUILD.
@@ -301,7 +306,7 @@ public:
 			}
 			else if (cmdLines.size() > 1)
 			{
-				cmd << "cmd.exe /C \"";
+				cmd << cmdExeAbsolutePath << " /C \"";
 			}
 			cmd << *li;
 		}
@@ -1535,9 +1540,27 @@ public:
 		mergedOutputs.insert(mergedOutputs.end(), outputs.begin(), outputs.end());
 		mergedOutputs.insert(mergedOutputs.end(), byproducts.begin(), byproducts.end());
 		std::vector<std::string> inputs;
+		std::vector<std::string> orderDependencies;
+
+		// Take the dependencies listed and split into targets and files.
+		const std::vector<std::string> &depends = ccg.GetDepends();
+		for (std::vector<std::string>::const_iterator iter = depends.begin();
+			iter != depends.end(); ++iter)
+		{
+			const std::string& dep = *iter;
+
+			bool isTarget = context.self->FindTarget(dep) != NULL;
+			if (isTarget)
+			{
+				orderDependencies.push_back(dep + "-" + configName);
+			}
+			else
+			{
+				inputs.push_back(dep);
+			}
+		}
 
 		std::vector<std::string> cmdLines;
-
 		if (ccg.GetNumberOfCommands() > 0) 
 		{
 			std::string wd = ccg.GetWorkingDirectory();
@@ -1599,6 +1622,9 @@ public:
 			}
 			context.fc.WriteVariable("ExecInput", Quote(Join(inputs, ",")));
 			context.fc.WriteVariable("ExecOutput", Quote(Join(mergedOutputs, ",")));
+
+			context.fc.WriteArray("PreBuildDependencies", 
+				Wrap(orderDependencies));
 			
 		}
 		context.fc.WritePopScope();
