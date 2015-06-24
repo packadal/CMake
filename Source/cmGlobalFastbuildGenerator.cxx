@@ -1173,6 +1173,7 @@ public:
 		cmLocalFastbuildGenerator* lg;
 	};
 	typedef std::map<const cmTarget*, TargetGenerationContext> TargetContextMap;
+	typedef std::map<const cmCustomCommand*, std::string> CustomCommandAliasMap;
 	typedef Detection::OrderedTargetSet OrderedTargets;
 
 	struct GenerationContext
@@ -1182,6 +1183,7 @@ public:
 		FileContext& fc;
 		OrderedTargets orderedTargets;
 		TargetContextMap targetContexts;
+		CustomCommandAliasMap customCommandAliases;
 	};
 
 	static std::string Quote(const std::string& str, const std::string& quotation = "'")
@@ -1530,8 +1532,30 @@ public:
 		const std::string& targetName)
 	{
 		cmMakefile* makefile = lg->GetMakefile();
-
 		const cmCustomCommand* cc = sourceFile->GetCustomCommand();
+		
+		// Check if this custom command has already been output.
+		// If it has then just drop an alias here to the original
+		CustomCommandAliasMap::iterator findResult = context.customCommandAliases.find(cc);
+		if (findResult != context.customCommandAliases.end())
+		{
+			// This command has already been generated. 
+			// So just drop an alias.
+			std::vector<std::string> targets;
+			targets.push_back(findResult->second);
+
+			context.fc.WriteCommand("Alias", Quote(targetName));
+			context.fc.WritePushScope();
+			{
+				context.fc.WriteArray("Targets",
+					Wrap(targets));
+			}
+			context.fc.WritePopScope();
+			return;
+		}
+		context.customCommandAliases[cc] = targetName;
+		
+		// We need to generate the command for execution.
 		cmCustomCommandGenerator ccg(*cc, configName, makefile);
 
 		const std::vector<std::string> &outputs = ccg.GetOutputs();
@@ -1762,6 +1786,7 @@ public:
 
 					std::stringstream customCommandTargetName;
 					customCommandTargetName << customCommandNameBase << (commandCount++);
+					customCommandTargetName << "-" << cmSystemTools::GetFilenameName(sourceFile->GetFullPath());;
 					customCommandTargets.push_back(customCommandTargetName.str());
 
 					WriteCustomCommand(context, sourceFile, lg, configName, customCommandTargetName.str());
