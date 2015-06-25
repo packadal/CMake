@@ -33,7 +33,7 @@
    - Parsing strings with double $$ doesn't generate a nice error
    - Undocumented that you can escape a $ with ^$
    - ExecInputs is invalid empty
-   - /c why does this need to be defined now?
+   - Would be great if you could define dummy targets (maybe blank aliases?)
 
   Limitations:
    - Only tested/working with MSVC
@@ -51,19 +51,17 @@
 
 	84% tests passed, 60 tests failed out of 372
 
-    43 - OutDir (Failed)
     44 - ObjectLibrary (Failed)
     48 - ExternalOBJ (Failed)
-    49 - LoadCommand (Failed)
     50 - LinkDirectory (Failed)
     58 - SourceGroups (Failed)
     59 - Preprocess (Failed)
     67 - AliasTarget (Failed)
     69 - InterfaceLibrary (Failed)
     70 - ConfigSources (Failed)
-    78 - Module.ExternalData (Failed)
-    79 - Module.GenerateExportHeader (Failed)
-    101 - SubProject-Stage2 (Failed)
+	78 - Module.ExternalData (Failed)
+    79 - Module.GenerateExportHeader (Failed)   
+	101 - SubProject-Stage2 (Failed)
     103 - TargetName (Failed)
     105 - CustComDepend (Failed)
     108 - CustomCommand (Failed)
@@ -74,27 +72,17 @@
     113 - BuildDepends (Failed)
     114 - SimpleInstall (Failed)
     115 - SimpleInstall-Stage2 (Failed)
-    119 - CPackComponentsForAll-ZIP-IgnoreGroup (Failed)
-    120 - CPackComponentsForAll-ZIP-AllInOne (Failed)
-    126 - LoadedCommandOneConfig (Failed)
-    127 - complex (Failed)
+	127 - complex (Failed)
     128 - complexOneConfig (Failed)
     131 - ExternalProject (Failed)
     132 - ExternalProjectLocal (Failed)
     133 - ExternalProjectUpdateSetup (Failed)
-    134 - ExternalProjectUpdate (Failed)
-    139 - TutorialStep5 (Failed)
-    140 - TutorialStep6 (Failed)
-    141 - TutorialStep7 (Failed)
-    143 - wrapping (Failed)
-    144 - qtwrapping (Failed)
-    148 - Dependency (Failed)
     149 - JumpWithLibOut (Failed)
     150 - JumpNoLibOut (Failed)
-    151 - Plugin (Failed)
+	151 - Plugin (Failed)
     157 - PrecompiledHeader (Failed)
     158 - ModuleDefinition (Failed)
-    160 - MFC (Failed)
+    ??160 - MFC (Failed)
     168 - CTest.BuildCommand.ProjectInSubdir (Failed)
     185 - CTestConfig.Script.Debug (Failed)
     186 - CTestConfig.Dashboard.Debug (Failed)
@@ -105,6 +93,7 @@
     191 - CTestConfig.Script.RelWithDebInfo (Failed)
     192 - CTestConfig.Dashboard.RelWithDebInfo (Failed)
     198 - CMakeCommands.target_compile_options (Failed)
+
     225 - IncludeDirectories (Failed)
     239 - CMakeOnly.CheckStructHasMember (Failed)
     276 - RunCMake.Configure (Failed)
@@ -1531,13 +1520,12 @@ public:
 
 	static void WriteCustomCommand(
 		GenerationContext& context,
-		const cmSourceFile* sourceFile,
+		const cmCustomCommand* cc,
 		cmLocalFastbuildGenerator *lg,
 		const std::string& configName,
 		const std::string& targetName)
 	{
 		cmMakefile* makefile = lg->GetMakefile();
-		const cmCustomCommand* cc = sourceFile->GetCustomCommand();
 		
 		// Check if this custom command has already been output.
 		// If it has then just drop an alias here to the original
@@ -1659,6 +1647,119 @@ public:
 		context.fc.WritePopScope();
 	}
 
+	static void WriteCustomBuildSteps(
+		GenerationContext& context,
+		cmLocalFastbuildGenerator *lg,
+		const std::vector<cmCustomCommand>& commands,
+		const std::string& buildStep,
+		const std::string& targetName)
+	{
+		if (commands.empty())
+		{
+			return;
+		}
+
+		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
+			iter != context.self->Configurations.end(); ++iter)
+		{
+			std::string configName = *iter;
+
+			context.fc.WriteVariable("buildStep_" + buildStep + "_" + configName, "");
+			context.fc.WritePushScopeStruct();
+
+			std::string baseName = targetName + "-" + buildStep + "-" + configName;
+			int commandCount = 1;
+			std::vector<std::string> customCommandTargets;
+			for (std::vector<cmCustomCommand>::const_iterator ccIter = commands.begin();
+				ccIter != commands.end(); ++ccIter)
+			{
+				const cmCustomCommand& cc = *ccIter;
+
+				std::stringstream customCommandTargetName;
+				customCommandTargetName << baseName << (commandCount++);
+				customCommandTargets.push_back(customCommandTargetName.str());
+
+				WriteCustomCommand(context, &cc, lg, configName, customCommandTargetName.str());
+			}
+
+			// Write an alias for this object group to group them all together
+			context.fc.WriteCommand("Alias", Quote(baseName));
+			context.fc.WritePushScope();
+			context.fc.WriteArray("Targets",
+				Wrap(customCommandTargets, "'", "'"));
+			context.fc.WritePopScope();
+
+			context.fc.WritePopScope();
+		}
+	}
+
+	static void WriteCustomBuildRules(
+		GenerationContext& context, 
+		cmLocalFastbuildGenerator *lg, 
+		cmGeneratorTarget *gt,
+		cmTarget &target)
+	{
+		const std::string& targetName = target.GetName();
+
+		// Iterating over all configurations
+		const char* customCommandGroupNamePrefix = "ObjectGroup_cmCustomCommands_";
+		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
+			iter != context.self->Configurations.end(); ++iter)
+		{
+			std::string configName = *iter;
+
+			context.fc.WriteVariable("CustomCommands_" + configName, "");
+			context.fc.WritePushScopeStruct();
+
+			context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
+
+			// Figure out the list of custom build rules in use by this target
+			// get a list of source files
+			std::vector<cmSourceFile const*> customCommands;
+			gt->GetCustomCommands(customCommands, configName);
+
+			if (!customCommands.empty())
+			{
+				std::vector<std::string> customCommandTargets;
+
+				// Write the custom command build rules for each configuration
+				int commandCount = 1;
+				std::string customCommandNameBase = targetName + "-" + configName + "-CustomCommand-";
+				for (std::vector<cmSourceFile const*>::iterator ccIter = customCommands.begin();
+					ccIter != customCommands.end(); ++ccIter)
+				{
+					const cmSourceFile* sourceFile = *ccIter;
+
+					std::stringstream customCommandTargetName;
+					customCommandTargetName << customCommandNameBase << (commandCount++);
+					customCommandTargetName << "-" << cmSystemTools::GetFilenameName(sourceFile->GetFullPath());;
+					customCommandTargets.push_back(customCommandTargetName.str());
+
+					WriteCustomCommand(context, sourceFile->GetCustomCommand(),
+						lg, configName, customCommandTargetName.str());
+				}
+
+				std::string customCommandGroupName = customCommandGroupNamePrefix + configName;
+
+				// Write an alias for this object group to group them all together
+				context.fc.WriteCommand("Alias", Quote(customCommandGroupName));
+				context.fc.WritePushScope();
+				context.fc.WriteArray("Targets",
+					Wrap(customCommandTargets, "'", "'"));
+				context.fc.WritePopScope();
+
+				// Now make everything use this as prebuilt dependencies
+				std::vector<std::string> tmp;
+				tmp.push_back(customCommandGroupName);
+				context.fc.WriteArray("PreBuildDependencies",
+					Wrap(tmp),
+					"+");
+			}
+
+			context.fc.WritePopScope();
+		}
+	}
+
 	static void WriteTargetDefinition(GenerationContext& context,
 		cmLocalFastbuildGenerator *lg, cmTarget &target)
 	{
@@ -1698,7 +1799,7 @@ public:
 			}
 		}
 
-		std::string targetName = target.GetName();
+		const std::string& targetName = target.GetName();
 		cmGeneratorTarget *gt = context.self->GetGeneratorTarget(&target);
 
 		context.fc.WriteComment("Target definition: "+targetName);
@@ -1760,62 +1861,12 @@ public:
 			context.fc.WritePopScope();
 		}
 
-		// Iterating over all configurations
-		const char* customCommandGroupNamePrefix = "ObjectGroup_cmCustomCommands_";
-		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-			iter != context.self->Configurations.end(); ++iter)
-		{
-			std::string configName = *iter;
-		
-			context.fc.WriteVariable("CustomCommands_" + configName, "");
-			context.fc.WritePushScopeStruct();
+		// Output the prebuild/Prelink commands
+		WriteCustomBuildSteps(context, lg, target.GetPreBuildCommands(), "PreBuild", targetName);
+		WriteCustomBuildSteps(context, lg, target.GetPreBuildCommands(), "PreLink", targetName);
 
-			context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
-
-			// Figure out the list of custom build rules in use by this target
-			// get a list of source files
-			std::vector<cmSourceFile const*> customCommands;
-			gt->GetCustomCommands(customCommands, configName);
-
-			if (!customCommands.empty())
-			{
-				std::vector<std::string> customCommandTargets;
-
-				// Write the custom command build rules for each configuration
-				int commandCount = 1;
-				std::string customCommandNameBase = targetName + "-" + configName + "-CustomCommand-";
-				for (std::vector<cmSourceFile const*>::iterator ccIter = customCommands.begin();
-					ccIter != customCommands.end(); ++ccIter)
-				{
-					const cmSourceFile* sourceFile = *ccIter;
-
-					std::stringstream customCommandTargetName;
-					customCommandTargetName << customCommandNameBase << (commandCount++);
-					customCommandTargetName << "-" << cmSystemTools::GetFilenameName(sourceFile->GetFullPath());;
-					customCommandTargets.push_back(customCommandTargetName.str());
-
-					WriteCustomCommand(context, sourceFile, lg, configName, customCommandTargetName.str());
-				}
-
-				std::string customCommandGroupName = customCommandGroupNamePrefix + configName;
-
-				// Write an alias for this object group to group them all together
-				context.fc.WriteCommand("Alias", Quote(customCommandGroupName));
-				context.fc.WritePushScope();
-				context.fc.WriteArray("Targets",
-					Wrap(customCommandTargets, "'", "'"));
-				context.fc.WritePopScope();
-
-				// Now make everything use this as prebuilt dependencies
-				std::vector<std::string> tmp;
-				tmp.push_back(customCommandGroupName);
-				context.fc.WriteArray("PreBuildDependencies",
-					Wrap(tmp),
-					"+");
-			}
-
-			context.fc.WritePopScope();
-		}
+		// Write the custom build rules
+		WriteCustomBuildRules(context, lg, gt, target);
 		
 		// Figure out the list of languages in use by this target
 		std::vector<std::string> objectGroups;
@@ -1968,7 +2019,7 @@ public:
 		{
 			std::string configName = *iter;
 
-			std::string linkRuleName = targetName + "-" + configName + "-link";
+			std::string linkRuleName = targetName + "-link-" + configName;
 
 			if (hasLinkerStage)
 			{
@@ -2057,21 +2108,67 @@ public:
 				}
 				context.fc.WritePopScope();
 			}
-
-			// Output a list of aliases
-			context.fc.WriteCommand("Alias", Quote(targetName + "-" + configName));
-			context.fc.WritePushScope();
-			context.fc.WriteArray("Targets", 
-				Wrap(objectGroups, "'" + targetName + "-", "-" + configName + "'"));
-
-			if (hasLinkerStage)
-			{
-				context.fc.WriteVariable("Targets", "{'" + linkRuleName + "'}", "+");
-			}
-			context.fc.WritePopScope();
 		}
 
+		// Output the postbuild commands
+		WriteCustomBuildSteps(context, lg, target.GetPostBuildCommands(), "PostBuild", targetName);
+
+		// Output a list of aliases
+		WriteTargetAliases(context, target, objectGroups);
+
 		context.fc.WritePopScope();
+	}
+
+	static void WriteTargetAliases(
+		GenerationContext& context,
+		cmTarget& target,
+		const std::vector<std::string>& objectGroups)
+	{
+		const std::string& targetName = target.GetName();
+		bool hasLinkerStage = target.GetType() != cmTarget::OBJECT_LIBRARY;
+
+		std::vector<std::string> extraTargets;
+		if (hasLinkerStage)
+		{
+			extraTargets.push_back("link");
+		}
+
+		// Always add the pre/post build steps as
+		// part of the alias.
+		// This way, if there are ONLY build steps, then
+		// things should still work too.
+		if (!target.GetPreBuildCommands().empty())
+		{
+			extraTargets.push_back("PreBuild");
+		}
+		if (!target.GetPreLinkCommands().empty())
+		{
+			extraTargets.push_back("PreLink");
+		}
+		if (!target.GetPostBuildCommands().empty())
+		{
+			extraTargets.push_back("PostBuild");
+		}
+
+		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
+			iter != context.self->Configurations.end(); ++iter)
+		{
+			std::string configName = *iter;
+
+			context.fc.WriteCommand("Alias", Quote(targetName + "-" + configName));
+			context.fc.WritePushScope();
+			context.fc.WriteArray("Targets",
+				Wrap(objectGroups, "'" + targetName + "-", "-" + configName + "'"));
+
+			if (!extraTargets.empty())
+			{
+				context.fc.WriteArray("Targets", 
+					Wrap(extraTargets, "'" + targetName + "-", "-" + configName + "'"),
+					"+");
+			}
+
+			context.fc.WritePopScope();
+		}
 	}
 
 	static void WriteTargetDefinitions(GenerationContext& context)
