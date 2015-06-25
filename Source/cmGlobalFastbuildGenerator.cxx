@@ -1852,12 +1852,33 @@ public:
 			// This is incase this library depends on code generated from previous ones
 			{
 				std::vector<std::string> dependencies;
-				Detection::DetectTargetCompileDependencies( context.self, target, dependencies );
+				Detection::DetectTargetCompileDependencies(context.self, target, dependencies);
 
-				context.fc.WriteArray("PreBuildDependencies", 
-					Wrap(dependencies, "'", "-"+configName+"'"));
+				context.fc.WriteArray("PreBuildDependencies",
+					Wrap(dependencies, "'", "-" + configName + "'"));
 			}
 
+			// Add to the list of prebuild deps
+			// The prelink and prebuild commands
+			{
+				std::vector<std::string> preBuildSteps;
+				if (!target.GetPreBuildCommands().empty())
+				{
+					preBuildSteps.push_back("PreBuild");
+				}
+				if (!target.GetPreLinkCommands().empty())
+				{
+					preBuildSteps.push_back("PreLink");
+				}
+
+				if (!preBuildSteps.empty())
+				{
+					context.fc.WriteArray("PreBuildDependencies",
+						Wrap(preBuildSteps, "'" + targetName + "-", "-" + configName + "'"),
+						"+");
+				}
+			}
+			
 			context.fc.WritePopScope();
 		}
 
