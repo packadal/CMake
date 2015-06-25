@@ -1093,15 +1093,6 @@ public:
 		{
 			bool operator()(const cmTarget* target) const
 			{
-				if (target->GetType() == cmTarget::UTILITY ||
-					target->GetType() == cmTarget::GLOBAL_TARGET)
-				{
-					// Temporarily disable all utilities and global targets.
-					// no good way to define dependancies for these things
-					// in fbuild yet. And they're not 100% necessary
-					return true;
-				}
-
 				if (target->GetType() == cmTarget::GLOBAL_TARGET)
 				{
 					// We only want to process global targets that live in the home
@@ -2192,6 +2183,12 @@ public:
 		}
 	}
 
+	static void WriteTargetUtilityDefinition(GenerationContext& context,
+		cmLocalFastbuildGenerator *lg, cmTarget &target)
+	{
+		// TODO:
+	}
+
 	static void WriteTargetDefinitions(GenerationContext& context)
 	{
 		context.fc.WriteSectionHeader("Target Definitions");
@@ -2226,10 +2223,8 @@ public:
 					WriteTargetDefinition(context, lg, *target);
 					break;
 				case cmTarget::UTILITY:
-					// TODO
-					break;
 				case cmTarget::GLOBAL_TARGET:
-					// TODO
+					WriteTargetUtilityDefinition(context, lg, *target);
 					break;
 				default:
 					break;
