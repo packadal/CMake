@@ -49,57 +49,60 @@
 
   Current list of unit tests failing:
 
-	84% tests passed, 60 tests failed out of 372
+	86% tests passed, 52 tests failed out of 368
 
-    44 - ObjectLibrary (Failed)
-    48 - ExternalOBJ (Failed)
-    50 - LinkDirectory (Failed)
-    58 - SourceGroups (Failed)
-    59 - Preprocess (Failed)
-    67 - AliasTarget (Failed)
-    69 - InterfaceLibrary (Failed)
-    70 - ConfigSources (Failed)
+	44 - ObjectLibrary (Failed)
+	48 - ExternalOBJ (Failed)
+	49 - LoadCommand (Failed)
+	50 - LinkDirectory (Failed)
+	58 - SourceGroups (Failed)
+	59 - Preprocess (Failed)
+	67 - AliasTarget (Failed)
+	69 - InterfaceLibrary (Failed)
+	70 - ConfigSources (Failed)
 	78 - Module.ExternalData (Failed)
-    79 - Module.GenerateExportHeader (Failed)   
+	79 - Module.GenerateExportHeader (Failed)
 	101 - SubProject-Stage2 (Failed)
-    103 - TargetName (Failed)
-    105 - CustComDepend (Failed)
-    108 - CustomCommand (Failed)
-    109 - CustomCommandByproducts (Failed)
-    110 - EmptyDepends (Failed)
-    111 - CustomCommandWorkingDirectory (Failed)
-    112 - OutOfSource (Failed)
-    113 - BuildDepends (Failed)
-    114 - SimpleInstall (Failed)
-    115 - SimpleInstall-Stage2 (Failed)
+	103 - TargetName (Failed)
+	105 - CustComDepend (Failed)
+	108 - CustomCommand (Failed)
+	109 - CustomCommandByproducts (Failed)
+	110 - EmptyDepends (Failed)
+	111 - CustomCommandWorkingDirectory (Failed)
+	112 - OutOfSource (Failed)
+	113 - BuildDepends (Failed)
+	114 - SimpleInstall (Failed)
+	115 - SimpleInstall-Stage2 (Failed)
+	116 - MissingInstall (Failed)
+	126 - LoadedCommandOneConfig (Failed)
 	127 - complex (Failed)
-    128 - complexOneConfig (Failed)
-    131 - ExternalProject (Failed)
-    132 - ExternalProjectLocal (Failed)
-    133 - ExternalProjectUpdateSetup (Failed)
-    149 - JumpWithLibOut (Failed)
-    150 - JumpNoLibOut (Failed)
+	128 - complexOneConfig (Failed)
+	131 - ExternalProject (Failed)
+	132 - ExternalProjectLocal (Failed)
+	133 - ExternalProjectUpdateSetup (Failed)
+	149 - JumpWithLibOut (Failed)
+	150 - JumpNoLibOut (Failed)
 	151 - Plugin (Failed)
-    157 - PrecompiledHeader (Failed)
-    158 - ModuleDefinition (Failed)
-    ??160 - MFC (Failed)
-    168 - CTest.BuildCommand.ProjectInSubdir (Failed)
-    185 - CTestConfig.Script.Debug (Failed)
-    186 - CTestConfig.Dashboard.Debug (Failed)
-    187 - CTestConfig.Script.MinSizeRel (Failed)
-    188 - CTestConfig.Dashboard.MinSizeRel (Failed)
-    189 - CTestConfig.Script.Release (Failed)
-    190 - CTestConfig.Dashboard.Release (Failed)
-    191 - CTestConfig.Script.RelWithDebInfo (Failed)
-    192 - CTestConfig.Dashboard.RelWithDebInfo (Failed)
-    198 - CMakeCommands.target_compile_options (Failed)
-
-    225 - IncludeDirectories (Failed)
-    239 - CMakeOnly.CheckStructHasMember (Failed)
-    276 - RunCMake.Configure (Failed)
-    281 - RunCMake.GeneratorExpression (Failed)
-    290 - RunCMake.CompileFeatures (Failed)
-    332 - RunCMake.File_Generate (Failed)
+	154 - SubDir (Failed)
+	157 - PrecompiledHeader (Failed)
+	158 - ModuleDefinition (Failed)
+	167 - CTest.BuildCommand.ProjectInSubdir (Failed)
+	182 - CTestConfig.Script.Debug (Failed)
+	183 - CTestConfig.Dashboard.Debug (Failed)
+	184 - CTestConfig.Script.MinSizeRel (Failed)
+	185 - CTestConfig.Dashboard.MinSizeRel (Failed)
+	186 - CTestConfig.Script.Release (Failed)
+	187 - CTestConfig.Dashboard.Release (Failed)
+	188 - CTestConfig.Script.RelWithDebInfo (Failed)
+	189 - CTestConfig.Dashboard.RelWithDebInfo (Failed)
+	195 - CMakeCommands.target_compile_options (Failed)
+	221 - Java (Failed)
+	223 - IncludeDirectories (Failed)
+	237 - CMakeOnly.CheckStructHasMember (Failed)
+	274 - RunCMake.Configure (Failed)
+	279 - RunCMake.GeneratorExpression (Failed)
+	288 - RunCMake.CompileFeatures (Failed)
+	330 - RunCMake.File_Generate (Failed)
 ============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"
 
@@ -1518,27 +1521,6 @@ public:
 	{
 		cmMakefile* makefile = lg->GetMakefile();
 		
-		// Check if this custom command has already been output.
-		// If it has then just drop an alias here to the original
-		CustomCommandAliasMap::iterator findResult = context.customCommandAliases.find(cc);
-		if (findResult != context.customCommandAliases.end())
-		{
-			// This command has already been generated. 
-			// So just drop an alias.
-			std::vector<std::string> targets;
-			targets.push_back(findResult->second);
-
-			context.fc.WriteCommand("Alias", Quote(targetName));
-			context.fc.WritePushScope();
-			{
-				context.fc.WriteArray("Targets",
-					Wrap(targets));
-			}
-			context.fc.WritePopScope();
-			return;
-		}
-		context.customCommandAliases[cc] = targetName;
-		
 		// We need to generate the command for execution.
 		cmCustomCommandGenerator ccg(*cc, configName, makefile);
 
@@ -1550,6 +1532,34 @@ public:
 		std::vector<std::string> inputs;
 		std::vector<std::string> orderDependencies;
 
+		// If this exec node always generates outputs,
+		// then we need to make sure we don't define outputs multiple times.
+		// but if the command should always run (i.e. post builds etc)
+		// then we will output a new one.
+		if (!mergedOutputs.empty())
+		{
+			// Check if this custom command has already been output.
+			// If it has then just drop an alias here to the original
+			CustomCommandAliasMap::iterator findResult = context.customCommandAliases.find(cc);
+			if (findResult != context.customCommandAliases.end())
+			{
+				// This command has already been generated. 
+				// So just drop an alias.
+				std::vector<std::string> targets;
+				targets.push_back(findResult->second);
+
+				context.fc.WriteCommand("Alias", Quote(targetName));
+				context.fc.WritePushScope();
+				{
+					context.fc.WriteArray("Targets",
+						Wrap(targets));
+				}
+				context.fc.WritePopScope();
+				return;
+			}
+			context.customCommandAliases[cc] = targetName;
+		}
+		
 		// Take the dependencies listed and split into targets and files.
 		const std::vector<std::string> &depends = ccg.GetDepends();
 		for (std::vector<std::string>::const_iterator iter = depends.begin();
@@ -1626,13 +1636,15 @@ public:
 			context.fc.WriteVariable("ExecArguments", Quote(args));
 			if (inputs.empty())
 			{
-				inputs.push_back("dummy");
+				inputs.push_back("dummy-in-" + targetName);
 			}
 			context.fc.WriteVariable("ExecInput", Quote(Join(inputs, ",")));
-			context.fc.WriteVariable("ExecOutput", Quote(Join(mergedOutputs, ",")));
 
-			context.fc.WriteArray("PreBuildDependencies", 
-				Wrap(orderDependencies));
+			if (mergedOutputs.empty())
+			{
+				mergedOutputs.push_back("dummy-out-" + targetName);
+			}
+			context.fc.WriteVariable("ExecOutput", Quote(Join(mergedOutputs, ",")));
 			
 		}
 		context.fc.WritePopScope();
@@ -1643,7 +1655,8 @@ public:
 		cmLocalFastbuildGenerator *lg,
 		const std::vector<cmCustomCommand>& commands,
 		const std::string& buildStep,
-		const std::string& targetName)
+		const std::string& targetName,
+		const std::vector<std::string>& orderDeps)
 	{
 		if (commands.empty())
 		{
@@ -1657,6 +1670,9 @@ public:
 
 			context.fc.WriteVariable("buildStep_" + buildStep + "_" + configName, "");
 			context.fc.WritePushScopeStruct();
+
+			context.fc.WriteArray("PreBuiltDependencies",
+				Wrap(orderDeps, "'", "-" + configName + "'"));
 
 			std::string baseName = targetName + "-" + buildStep + "-" + configName;
 			int commandCount = 1;
@@ -1796,6 +1812,13 @@ public:
 		context.fc.WriteComment("Target definition: "+targetName);
 		context.fc.WritePushScope();
 
+		std::vector<std::string> dependencies;
+		Detection::DetectTargetCompileDependencies(context.self, target, dependencies);
+
+		// Output the prebuild/Prelink commands
+		WriteCustomBuildSteps(context, lg, target.GetPreBuildCommands(), "PreBuild", targetName, dependencies);
+		WriteCustomBuildSteps(context, lg, target.GetPreBuildCommands(), "PreLink", targetName, dependencies);
+
 		// Iterate over each configuration
 		// This time to define linker settings for each config
 		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
@@ -1842,9 +1865,6 @@ public:
 			// So all dependant libraries are built before this one is
 			// This is incase this library depends on code generated from previous ones
 			{
-				std::vector<std::string> dependencies;
-				Detection::DetectTargetCompileDependencies(context.self, target, dependencies);
-
 				context.fc.WriteArray("PreBuildDependencies",
 					Wrap(dependencies, "'", "-" + configName + "'"));
 			}
@@ -1872,10 +1892,6 @@ public:
 			
 			context.fc.WritePopScope();
 		}
-
-		// Output the prebuild/Prelink commands
-		WriteCustomBuildSteps(context, lg, target.GetPreBuildCommands(), "PreBuild", targetName);
-		WriteCustomBuildSteps(context, lg, target.GetPreBuildCommands(), "PreLink", targetName);
 
 		// Write the custom build rules
 		WriteCustomBuildRules(context, lg, gt, target);
@@ -2122,8 +2138,31 @@ public:
 			}
 		}
 
+		if (hasLinkerStage)
+		{
+			objectGroups.push_back("link");
+		}
+
 		// Output the postbuild commands
-		WriteCustomBuildSteps(context, lg, target.GetPostBuildCommands(), "PostBuild", targetName);
+		WriteCustomBuildSteps(context, lg, target.GetPostBuildCommands(), "PostBuild", targetName,
+			Wrap(objectGroups, targetName + "-", ""));
+
+		// Always add the pre/post build steps as
+		// part of the alias.
+		// This way, if there are ONLY build steps, then
+		// things should still work too.
+		if (!target.GetPreBuildCommands().empty())
+		{
+			objectGroups.push_back("PreBuild");
+		}
+		if (!target.GetPreLinkCommands().empty())
+		{
+			objectGroups.push_back("PreLink");
+		}
+		if (!target.GetPostBuildCommands().empty())
+		{
+			objectGroups.push_back("PostBuild");
+		}
 
 		// Output a list of aliases
 		WriteTargetAliases(context, target, objectGroups);
@@ -2137,31 +2176,7 @@ public:
 		const std::vector<std::string>& objectGroups)
 	{
 		const std::string& targetName = target.GetName();
-		bool hasLinkerStage = target.GetType() != cmTarget::OBJECT_LIBRARY;
-
-		std::vector<std::string> extraTargets;
-		if (hasLinkerStage)
-		{
-			extraTargets.push_back("link");
-		}
-
-		// Always add the pre/post build steps as
-		// part of the alias.
-		// This way, if there are ONLY build steps, then
-		// things should still work too.
-		if (!target.GetPreBuildCommands().empty())
-		{
-			extraTargets.push_back("PreBuild");
-		}
-		if (!target.GetPreLinkCommands().empty())
-		{
-			extraTargets.push_back("PreLink");
-		}
-		if (!target.GetPostBuildCommands().empty())
-		{
-			extraTargets.push_back("PostBuild");
-		}
-
+		
 		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
 			iter != context.self->Configurations.end(); ++iter)
 		{
@@ -2171,13 +2186,6 @@ public:
 			context.fc.WritePushScope();
 			context.fc.WriteArray("Targets",
 				Wrap(objectGroups, "'" + targetName + "-", "-" + configName + "'"));
-
-			if (!extraTargets.empty())
-			{
-				context.fc.WriteArray("Targets", 
-					Wrap(extraTargets, "'" + targetName + "-", "-" + configName + "'"),
-					"+");
-			}
 
 			context.fc.WritePopScope();
 		}
