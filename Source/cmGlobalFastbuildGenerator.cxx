@@ -25,6 +25,7 @@
 	 I think compilation is the part that gets distributed anyway.
 	 But it might mean that the cache has trouble calculating deps for obj->lib/exe. 
 	 Not sure if Fastbuild supports that anyway yet
+   - Need to sort custom build commands by their outputs
    
   Fastbuild bugs:
    - Defining prebuild dependencies that don't exist, causes the error output when that 
@@ -34,6 +35,8 @@
    - Undocumented that you can escape a $ with ^$
    - ExecInputs is invalid empty
    - Would be great if you could define dummy targets (maybe blank aliases?)
+   - Exec nodes need to not worry about dummy output files not being created
+   - Would be nice if nodes didn't need to be completely in order. But then cycles would be possible
 
   Limitations:
    - Only tested/working with MSVC
@@ -706,6 +709,16 @@ public:
 		cmGlobalFastbuildGenerator * self,
 		cmTarget &target)
 	{
+		// Object libraries do not have linker stages
+		// nor utilities
+		bool hasObjectGroups =
+			target.GetType() != cmTarget::UTILITY &&
+			target.GetType() != cmTarget::GLOBAL_TARGET;
+		if (!hasObjectGroups)
+		{
+			return;
+		}
+
 		cmGeneratorTarget *gt = self->GetGeneratorTarget(&target);
 
 		for (std::vector<std::string>::iterator iter = self->Configurations.begin();
@@ -1671,8 +1684,11 @@ public:
 			context.fc.WriteVariable("buildStep_" + buildStep + "_" + configName, "");
 			context.fc.WritePushScopeStruct();
 
-			context.fc.WriteArray("PreBuiltDependencies",
-				Wrap(orderDeps, "'", "-" + configName + "'"));
+			context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
+
+			context.fc.WriteArray("PreBuildDependencies",
+				Wrap(orderDeps, "'", "-" + configName + "'"),
+				"+");
 
 			std::string baseName = targetName + "-" + buildStep + "-" + configName;
 			int commandCount = 1;
@@ -1700,12 +1716,13 @@ public:
 		}
 	}
 
-	static void WriteCustomBuildRules(
+	static bool WriteCustomBuildRules(
 		GenerationContext& context, 
 		cmLocalFastbuildGenerator *lg, 
 		cmGeneratorTarget *gt,
 		cmTarget &target)
 	{
+		bool hasCustomCommands = false;
 		const std::string& targetName = target.GetName();
 
 		// Iterating over all configurations
@@ -1731,7 +1748,7 @@ public:
 
 				// Write the custom command build rules for each configuration
 				int commandCount = 1;
-				std::string customCommandNameBase = targetName + "-" + configName + "-CustomCommand-";
+				std::string customCommandNameBase = targetName + "-CustomCommand-" + configName + "-";
 				for (std::vector<cmSourceFile const*>::iterator ccIter = customCommands.begin();
 					ccIter != customCommands.end(); ++ccIter)
 				{
@@ -1746,7 +1763,7 @@ public:
 						lg, configName, customCommandTargetName.str());
 				}
 
-				std::string customCommandGroupName = customCommandGroupNamePrefix + configName;
+				std::string customCommandGroupName = targetName + "-CustomCommands-" + configName;
 
 				// Write an alias for this object group to group them all together
 				context.fc.WriteCommand("Alias", Quote(customCommandGroupName));
@@ -1761,10 +1778,14 @@ public:
 				context.fc.WriteArray("PreBuildDependencies",
 					Wrap(tmp),
 					"+");
+
+				hasCustomCommands = true;
 			}
 
 			context.fc.WritePopScope();
 		}
+
+		return hasCustomCommands;
 	}
 
 	static void WriteTargetDefinition(GenerationContext& context,
@@ -1796,12 +1817,14 @@ public:
 			}
 			case cmTarget::UTILITY:
 			case cmTarget::GLOBAL_TARGET:
+			{
+				// No link command used 
+				linkCommand = "NoLinkCommand";
+				break;
+			}
 			case cmTarget::UNKNOWN_LIBRARY:
 			{
 				// Ignoring this target generation...
-				// Still generate a valid target by the name,
-				// but don't make it do anything
-				linkCommand = "Alias";
 				return;
 			}
 		}
@@ -1894,7 +1917,7 @@ public:
 		}
 
 		// Write the custom build rules
-		WriteCustomBuildRules(context, lg, gt, target);
+		bool hasCustomBuildRules = WriteCustomBuildRules(context, lg, gt, target);
 		
 		// Figure out the list of languages in use by this target
 		std::vector<std::string> objectGroups;
@@ -2037,8 +2060,11 @@ public:
 		}
 
 		// Object libraries do not have linker stages
+		// nor utilities
 		bool hasLinkerStage = 
-			target.GetType() != cmTarget::OBJECT_LIBRARY;
+			target.GetType() != cmTarget::OBJECT_LIBRARY &&
+			target.GetType() != cmTarget::UTILITY &&
+			target.GetType() != cmTarget::GLOBAL_TARGET;
 
 		// Iterate over each configuration
 		// This time to define linker settings for each config
@@ -2138,6 +2164,18 @@ public:
 			}
 		}
 
+		if (!target.GetPreBuildCommands().empty())
+		{
+			objectGroups.push_back("PreBuild");
+		}
+		if (!target.GetPreLinkCommands().empty())
+		{
+			objectGroups.push_back("PreLink");
+		}
+		if (hasCustomBuildRules)
+		{
+			objectGroups.push_back("CustomCommands");
+		}
 		if (hasLinkerStage)
 		{
 			objectGroups.push_back("link");
@@ -2151,14 +2189,6 @@ public:
 		// part of the alias.
 		// This way, if there are ONLY build steps, then
 		// things should still work too.
-		if (!target.GetPreBuildCommands().empty())
-		{
-			objectGroups.push_back("PreBuild");
-		}
-		if (!target.GetPreLinkCommands().empty())
-		{
-			objectGroups.push_back("PreLink");
-		}
 		if (!target.GetPostBuildCommands().empty())
 		{
 			objectGroups.push_back("PostBuild");
@@ -2194,7 +2224,7 @@ public:
 	static void WriteTargetUtilityDefinition(GenerationContext& context,
 		cmLocalFastbuildGenerator *lg, cmTarget &target)
 	{
-		// TODO:
+		WriteTargetDefinition(context, lg, target);
 	}
 
 	static void WriteTargetDefinitions(GenerationContext& context)
