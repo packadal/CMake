@@ -606,8 +606,7 @@ public:
 
 		vars.Defines = "$CompileDefineFlags$";
 		vars.Flags = "$CompileFlags$";
-		vars.LinkFlags = "$LinkFlags$";
-
+		vars.LinkFlags = "$LinkFlags$ $LinkPath$";
 		// Rule for linking library/executable.
 		std::vector<std::string> linkCmds;
 		ComputeLinkCmds(linkCmds, lg, target, gt, configName);
@@ -2188,6 +2187,9 @@ public:
 						gt,
 						false);
 
+					linkPath = frameworkPath + linkPath;
+
+					context.fc.WriteVariable("LinkPath", "'" + linkPath + "'");
 					context.fc.WriteVariable("LinkLibs", "'" + linkLibs + "'");
 					context.fc.WriteVariable("LinkFlags", "'" + linkFlags + "'");
 
