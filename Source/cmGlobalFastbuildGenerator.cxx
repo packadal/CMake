@@ -1920,7 +1920,8 @@ public:
 		bool hasCustomBuildRules = WriteCustomBuildRules(context, lg, gt, target);
 		
 		// Figure out the list of languages in use by this target
-		std::vector<std::string> objectGroups;
+		std::vector<std::string> linkableDeps;
+		std::vector<std::string> orderDeps;
 		std::set<std::string> languages;
 		Detection::DetectLanguages(languages, context.self, target);
 
@@ -1931,7 +1932,7 @@ public:
 		{
 			const std::string & objectGroupLanguage = *langIter;
 			std::string ruleObjectGroupName = "ObjectGroup_" + objectGroupLanguage;
-			objectGroups.push_back(ruleObjectGroupName);
+			linkableDeps.push_back(ruleObjectGroupName);
 
 			context.fc.WriteVariable(ruleObjectGroupName, "");
 			context.fc.WritePushScopeStruct();
@@ -2124,13 +2125,14 @@ public:
 					context.fc.WriteVariable("LinkerOptions", "'$BaseLinkerOptions$ $LinkLibs$'");
 
 					context.fc.WriteArray("Libraries", 
-						Wrap(objectGroups, "'" + targetName + "-", "-" + configName + "'"));
+						Wrap(linkableDeps, "'" + targetName + "-", "-" + configName + "'"));
 
 					// Now detect the extra dependencies for linking
 					{
 						std::vector<std::string> dependencies;
-						Detection::DetectTargetLinkDependencies( context.self, target, configName, dependencies );
 						Detection::DetectTargetObjectDependencies( context.self, target, configName, dependencies );
+						dependencies = Wrap(dependencies, "", "-products");
+						Detection::DetectTargetLinkDependencies(context.self, target, configName, dependencies);
 
 						context.fc.WriteArray("Libraries", 
 							Wrap(dependencies, "'", "'"), 
@@ -2166,24 +2168,25 @@ public:
 
 		if (!target.GetPreBuildCommands().empty())
 		{
-			objectGroups.push_back("PreBuild");
+			orderDeps.push_back("PreBuild");
 		}
 		if (!target.GetPreLinkCommands().empty())
 		{
-			objectGroups.push_back("PreLink");
+			orderDeps.push_back("PreLink");
 		}
 		if (hasCustomBuildRules)
 		{
-			objectGroups.push_back("CustomCommands");
+			orderDeps.push_back("CustomCommands");
 		}
 		if (hasLinkerStage)
 		{
-			objectGroups.push_back("link");
+			linkableDeps.push_back("link");
+			orderDeps.push_back("link");
 		}
 
 		// Output the postbuild commands
 		WriteCustomBuildSteps(context, lg, target.GetPostBuildCommands(), "PostBuild", targetName,
-			Wrap(objectGroups, targetName + "-", ""));
+			Wrap(orderDeps, targetName + "-", ""));
 
 		// Always add the pre/post build steps as
 		// part of the alias.
@@ -2191,11 +2194,11 @@ public:
 		// things should still work too.
 		if (!target.GetPostBuildCommands().empty())
 		{
-			objectGroups.push_back("PostBuild");
+			orderDeps.push_back("PostBuild");
 		}
 
 		// Output a list of aliases
-		WriteTargetAliases(context, target, objectGroups);
+		WriteTargetAliases(context, target, linkableDeps, orderDeps);
 
 		context.fc.WritePopScope();
 	}
@@ -2203,7 +2206,8 @@ public:
 	static void WriteTargetAliases(
 		GenerationContext& context,
 		cmTarget& target,
-		const std::vector<std::string>& objectGroups)
+		const std::vector<std::string>& linkableDeps,
+		const std::vector<std::string>& orderDeps)
 	{
 		const std::string& targetName = target.GetName();
 		
@@ -2212,11 +2216,28 @@ public:
 		{
 			std::string configName = *iter;
 
-			context.fc.WriteCommand("Alias", Quote(targetName + "-" + configName));
-			context.fc.WritePushScope();
-			context.fc.WriteArray("Targets",
-				Wrap(objectGroups, "'" + targetName + "-", "-" + configName + "'"));
+			if (!linkableDeps.empty())
+			{
+				context.fc.WriteCommand("Alias",
+					Quote(targetName + "-" + configName + "-products"));
+				context.fc.WritePushScope();
+				context.fc.WriteArray("Targets",
+					Wrap(linkableDeps, "'" + targetName + "-", "-" + configName + "'"));
+				context.fc.WritePopScope();
+			}
 
+			if (!orderDeps.empty() || !linkableDeps.empty())
+			{
+				context.fc.WriteCommand("Alias",
+					Quote(targetName + "-" + configName));
+				context.fc.WritePushScope();
+				context.fc.WriteArray("Targets",
+					Wrap(linkableDeps, "'" + targetName + "-", "-" + configName + "'"));
+				context.fc.WriteArray("Targets",
+					Wrap(orderDeps, "'" + targetName + "-", "-" + configName + "'"),
+					"+");
+			}
+			
 			context.fc.WritePopScope();
 		}
 	}
