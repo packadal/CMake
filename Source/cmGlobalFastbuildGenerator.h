@@ -52,6 +52,8 @@ public:
 		const std::string& suffix,
 		std::string& dir);
 
+	virtual void ComputeTargetObjectDirectory(cmGeneratorTarget*) const;
+
 private:
 	class Factory;
 	class Detail;

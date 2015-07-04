@@ -2508,3 +2508,18 @@ void cmGlobalFastbuildGenerator::AppendDirectoryForConfig(
 }
 
 //----------------------------------------------------------------------------
+void cmGlobalFastbuildGenerator::ComputeTargetObjectDirectory(
+	cmGeneratorTarget* gt) const
+{
+	cmTarget* target = gt->Target;
+
+	// Compute full path to object file directory for this target.
+	std::string dir;
+	dir += gt->Makefile->GetCurrentOutputDirectory();
+	dir += "/";
+	dir += gt->LocalGenerator->GetTargetDirectory(*target);
+	dir += "/";
+	gt->ObjectDirectory = dir;
+}
+
+//----------------------------------------------------------------------------
