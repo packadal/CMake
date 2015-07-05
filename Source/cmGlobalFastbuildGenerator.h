@@ -53,6 +53,7 @@ public:
 		std::string& dir);
 
 	virtual void ComputeTargetObjectDirectory(cmGeneratorTarget*) const;
+	virtual const char* GetCMakeCFGIntDir() const;
 
 private:
 	class Factory;

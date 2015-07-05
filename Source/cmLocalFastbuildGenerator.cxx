@@ -21,9 +21,9 @@
 cmLocalFastbuildGenerator::cmLocalFastbuildGenerator()
 {
 #ifdef _WIN32
-  this->WindowsShell = true;
+	this->WindowsShell = true;
 #endif
-  this->TargetImplib = "$TargetOutputImplib$";
+	this->TargetImplib = "$TargetOutputImplib$";
 }
 
 //----------------------------------------------------------------------------

@@ -124,6 +124,7 @@
 #include <assert.h>
 
 static const char fastbuildGeneratorName[] = "Fastbuild";
+#define FASTBUILD_DOLLAR_LOOPHOLE "(FASTbuild_Dollar_Symbol)"
 
 class cmGlobalFastbuildGenerator::Factory 
 	: public cmGlobalGeneratorFactory
@@ -284,7 +285,7 @@ public:
 		if (cmdLines.empty())
 		{
 #ifdef _WIN32
-			return "cd .";
+			return cmdExeAbsolutePath + " /C \"cd .\"";
 #else
 			return ":";
 #endif
@@ -318,7 +319,12 @@ public:
 			cmd << *li;
 		}
 #endif
-		return cmd.str();
+		std::string cmdOut = cmd.str();
+
+		// Replace the Fastbuild dollar symbol with $
+		cmSystemTools::ReplaceString(cmdOut, FASTBUILD_DOLLAR_LOOPHOLE, "$");
+
+		return cmdOut;
 	}
 
 	static void DetectConfigurations(cmGlobalFastbuildGenerator * self,
@@ -934,8 +940,190 @@ public:
 		}
 	};
 
-	typedef std::vector<const cmTarget*> OrderedTargetSet;
+	struct DependencySorter
+	{
+		struct TargetHelper
+		{
+			cmGlobalFastbuildGenerator *gg;
 
+			void GetOutputs(const cmTarget* entry, std::vector<std::string>& outputs)
+			{
+				outputs.push_back(entry->GetName());
+			}
+
+			void GetInputs(const cmTarget* entry, std::vector<std::string>& inputs)
+			{
+				TargetDependSet const& ts = gg->GetTargetDirectDepends(*entry);
+				for (TargetDependSet::const_iterator iter = ts.begin(); iter != ts.end(); ++iter)
+				{
+					const cmTarget * dtarget = *iter;
+					inputs.push_back(dtarget->GetName());
+				}
+			}
+		};
+		
+		struct CustomCommandHelper
+		{
+			cmGlobalFastbuildGenerator *gg;
+			cmLocalFastbuildGenerator *lg;
+			const std::string& configName;
+
+			void GetOutputs(const cmSourceFile* entry, std::vector<std::string>& outputs)
+			{
+				const cmCustomCommand* cc = entry->GetCustomCommand();
+				cmMakefile* makefile = lg->GetMakefile();
+
+				// We need to generate the command for execution.
+				cmCustomCommandGenerator ccg(*cc, configName, makefile);
+
+				const std::vector<std::string> &ccOutputs = ccg.GetOutputs();
+				const std::vector<std::string> &byproducts = ccg.GetByproducts();
+				outputs.insert(outputs.end(), ccOutputs.begin(), ccOutputs.end());
+				outputs.insert(outputs.end(), byproducts.begin(), byproducts.end());
+			}
+
+			void GetInputs(const cmSourceFile* entry, std::vector<std::string>& inputs)
+			{
+				const cmCustomCommand* cc = entry->GetCustomCommand();
+				cmMakefile* makefile = lg->GetMakefile();
+				cmCustomCommandGenerator ccg(*cc, configName, makefile);
+
+				// Take the dependencies listed and split into targets and files.
+				const std::vector<std::string> &depends = ccg.GetDepends();
+				for (std::vector<std::string>::const_iterator iter = depends.begin();
+					iter != depends.end(); ++iter)
+				{
+					const std::string& dep = *iter;
+
+					bool isTarget = gg->FindTarget(dep) != NULL;
+					if (!isTarget)
+					{
+						inputs.push_back(dep);
+					}
+				}
+			}
+		};
+
+		template <class TType, class TTypeHelper>
+		static void Sort(TTypeHelper& helper, std::vector<const TType*>& entries)
+		{
+			typedef std::vector<std::string> StringVector;
+			typedef std::vector<const TType*> OrderedEntrySet;
+			typedef std::map<std::string, const TType*> OutputMap;
+			typedef std::map<const TType*, StringVector> DependencyMap;
+
+			// Build up a map of outputNames to entries
+			OutputMap outputMap;
+			for (OrderedEntrySet::iterator iter = entries.begin();
+				iter != entries.end();
+				++iter)
+			{
+				const TType* entry = *iter;
+				StringVector outputs;
+				helper.GetOutputs(entry, outputs);
+
+				for (StringVector::iterator outIter = outputs.begin();
+					outIter != outputs.end();
+					++outIter)
+				{
+					outputMap[*outIter] = entry;
+				}
+			}
+
+			// Now build a forward and reverse map of dependencies
+			// Build the reverse graph, 
+			// each target, and the set of things that depend upon it
+			typedef std::map<const TType*, std::vector<const TType*>> DepMap;
+			DepMap forwardDeps;
+			DepMap reverseDeps;
+			for (OrderedEntrySet::iterator iter = entries.begin();
+				iter != entries.end();
+				++iter)
+			{
+				const TType* entry = *iter;
+				std::vector<const TType*>& entryInputs = forwardDeps[entry];
+
+				StringVector inputs;
+				helper.GetInputs(entry, inputs);
+				for (StringVector::const_iterator inIter = inputs.begin(); 
+					inIter != inputs.end(); 
+					++inIter)
+				{
+					const std::string& input = *inIter;
+					// Lookup the input in the output map and find the right entry
+					OutputMap::iterator findResult = outputMap.find(input);
+					if (findResult != outputMap.end())
+					{
+						const TType* dentry = findResult->second;
+						entryInputs.push_back(dentry);
+						reverseDeps[dentry].push_back(entry);
+					}
+				}
+			}
+
+			// We have all the information now.
+			// Clear the array passed in
+			entries.clear();
+
+			// Now iterate over each target with its list of dependencies.
+			// And dump out ones that have 0 dependencies.
+			bool written = true;
+			while (!forwardDeps.empty() && written)
+			{
+				written = false;
+				for (DepMap::iterator iter = forwardDeps.begin();
+					iter != forwardDeps.end(); ++iter)
+				{
+					std::vector<const TType*>& fwdDeps = iter->second;
+					const TType* entry = iter->first;
+					if (!fwdDeps.empty())
+					{
+						// Looking for empty dependency lists.
+						// Those are the next to be written out
+						continue;
+					}
+
+					// dependency list is empty,
+					// add it to the output list
+					written = true;
+					entries.push_back(entry);
+
+					// Use reverse dependencies to determine 
+					// what forward dep lists to adjust
+					std::vector<const TType*>& revDeps = reverseDeps[entry];
+					for (unsigned int i = 0; i < revDeps.size(); ++i)
+					{
+						const TType* revDep = revDeps[i];
+
+						// Fetch the list of deps on that target
+						std::vector<const TType*>& revDepFwdDeps =
+							forwardDeps[revDep];
+						// remove the one we just added from the list
+						revDepFwdDeps.erase(
+							std::remove(revDepFwdDeps.begin(), revDepFwdDeps.end(), entry),
+							revDepFwdDeps.end());
+					}
+
+					// Remove it from forward deps so not
+					// considered again
+					forwardDeps.erase(entry);
+
+					// Must break now as we've invalidated
+					// our forward deps iterator
+					break;
+				}
+			}
+
+			// Validation...
+			// Make sure we managed to find a place
+			// to insert every dependency.
+			// If this fires, then there is most likely
+			// a cycle in the graph...
+			assert(forwardDeps.empty());
+		}
+	};
+
+	typedef std::vector<const cmTarget*> OrderedTargetSet;
 	static void ComputeTargetOrderAndDependencies(
 		cmGlobalFastbuildGenerator* gg,
 		OrderedTargetSet& orderedTargets)
@@ -967,137 +1155,8 @@ public:
 			orderedTargets.push_back(&target);
 		}
 
-		struct SortByDependency
-		{
-			SortByDependency(cmGlobalFastbuildGenerator* agg)
-				: gg(agg)
-			{}
-
-			cmGlobalFastbuildGenerator* gg;
-			bool operator()(const cmTarget* l, const cmTarget* r) const
-			{
-				// Test for dependencies
-				if (aHasDependencyOnB(r, l))
-				{
-					return true;
-				}
-
-				return false;
-			}
-
-			bool aHasDependencyOnB(const cmTarget* candidate, const cmTarget* test) const
-			{
-				TargetDependSet const& ts = gg->GetTargetDirectDepends(*candidate);
-				if (ts.find(test) != ts.end())
-				{
-					return true;
-				}
-
-				for(TargetDependSet::const_iterator i = ts.begin(); i != ts.end(); ++i)
-				{
-					const cmTarget * dtarget = *i;
-					if (aHasDependencyOnB(dtarget, test))
-					{
-						return true;
-					}
-				}
-
-				return false;
-			}
-		};
-
-		// Now I have an array of all targets.
-		// Attempt to sort it
-		std::_Insertion_sort(orderedTargets.begin(), orderedTargets.end(), 
-			SortByDependency(gg));
-
-		// Validate
-		SortByDependency lessThan(gg);
-		std::vector<const cmTarget*> newOt;
-
-		// Build the reverse graph, 
-		// each target, and the set of things that depend upon it
-		typedef std::map<const cmTarget*, std::vector<const cmTarget*>> DepMap;
-		DepMap forwardDeps;
-		DepMap reverseDeps;
-		for (int i = 0; i < ((int)orderedTargets.size()); ++i)
-		{
-			const cmTarget* target = orderedTargets[i];
-			std::vector<const cmTarget*>& fwdDeps = forwardDeps[target];
-
-			TargetDependSet const& ts = gg->GetTargetDirectDepends(*target);
-			for(TargetDependSet::const_iterator iter = ts.begin(); iter != ts.end(); ++iter)
-			{
-				const cmTarget * dtarget = *iter;
-				fwdDeps.push_back(dtarget);
-				reverseDeps[dtarget].push_back(target);
-			}
-		}
-		orderedTargets.clear();
-
-		// Now iterate over each target with its list of dependencies.
-		// And dump out ones that have 0 dependencies.
-		bool written = true;
-		while (!forwardDeps.empty() && written)
-		{
-			written = false;
-			for (DepMap::iterator iter = forwardDeps.begin();
-				iter != forwardDeps.end(); ++iter)
-			{
-				std::vector<const cmTarget*>& fwdDeps = iter->second;
-				const cmTarget* target = iter->first;
-				if (!fwdDeps.empty())
-				{
-					// Looking for empty dependency lists.
-					// Those are the next to be written out
-					continue;
-				}
-
-				// dependency list is empty,
-				// add it to the output list
-				written = true;
-				orderedTargets.push_back(target);
-
-				// Use reverse dependencies to determine 
-				// what forward dep lists to adjust
-				std::vector<const cmTarget*>& revDeps = reverseDeps[target];
-				for (unsigned int i = 0; i < revDeps.size(); ++i)
-				{
-					const cmTarget* revDep = revDeps[i];
-					
-					// Fetch the list of deps on that target
-					std::vector<const cmTarget*>& revDepFwdDeps = 
-						forwardDeps[revDep];
-					// remove the one we just added from the list
-					revDepFwdDeps.erase(
-						std::remove(revDepFwdDeps.begin(), revDepFwdDeps.end(), target),
-						revDepFwdDeps.end());
-				}
-
-				// Remove it from forward deps so not
-				// considered again
-				forwardDeps.erase(target);
-
-				// Must break now as we've invalidated
-				// our forward deps iterator
-				break;
-			}
-		}
-		// Make sure we managed to find a place
-		// to insert every dependency.
-		// If this fires, then there is most likely
-		// a cycle in the graph...
-		assert(forwardDeps.empty());
-
-		for (int i = 0; i < ((int)orderedTargets.size() - 1); ++i)
-		{
-			for (int j = i + 1; j < ((int)orderedTargets.size()); ++j)
-			{
-				// i does not need to be < j.
-				// but j must not be less than i
-				assert(!lessThan(orderedTargets[j], orderedTargets[i]));
-			}
-		}
+		DependencySorter::TargetHelper targetHelper = {gg};
+		DependencySorter::Sort(targetHelper, orderedTargets);
 	}
 
 	static void StripNestedGlobalTargets( OrderedTargetSet& orderedTargets )
@@ -1647,12 +1706,13 @@ public:
 		{
 			context.fc.WriteVariable("ExecExecutable", Quote(executable));
 			context.fc.WriteVariable("ExecArguments", Quote(args));
-			if (inputs.empty())
+			context.fc.WriteVariable("ExecInput", "'dummy-in'");
+			if (!inputs.empty())
 			{
-				inputs.push_back("dummy-in-" + targetName);
+				context.fc.WriteArray("ExecAdditionalDependencies",
+					Wrap(inputs));
 			}
-			context.fc.WriteVariable("ExecInput", Quote(Join(inputs, ",")));
-
+			
 			if (mergedOutputs.empty())
 			{
 				mergedOutputs.push_back("dummy-out-" + targetName);
@@ -1676,6 +1736,7 @@ public:
 			return;
 		}
 
+		// Now output the commands
 		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
 			iter != context.self->Configurations.end(); ++iter)
 		{
@@ -1744,6 +1805,13 @@ public:
 
 			if (!customCommands.empty())
 			{
+				// Presort the commands to adjust for dependencies
+				// In a number of cases, the commands inputs will be the outputs
+				// from another command. Need to sort the commands to output them in order.
+				Detection::DependencySorter::CustomCommandHelper ccHelper =
+					{ context.self, lg, configName };
+				Detection::DependencySorter::Sort(ccHelper, customCommands);
+
 				std::vector<std::string> customCommandTargets;
 
 				// Write the custom command build rules for each configuration
@@ -2520,6 +2588,12 @@ void cmGlobalFastbuildGenerator::ComputeTargetObjectDirectory(
 	dir += gt->LocalGenerator->GetTargetDirectory(*target);
 	dir += "/";
 	gt->ObjectDirectory = dir;
+}
+
+//----------------------------------------------------------------------------
+const char* cmGlobalFastbuildGenerator::GetCMakeCFGIntDir() const
+{
+	return FASTBUILD_DOLLAR_LOOPHOLE "ConfigName" FASTBUILD_DOLLAR_LOOPHOLE;
 }
 
 //----------------------------------------------------------------------------
