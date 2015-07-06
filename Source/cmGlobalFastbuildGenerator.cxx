@@ -2410,7 +2410,7 @@ public:
 
 				perTarget[targetName].push_back(aliasName);
 
-				if (target->GetPropertyAsBool("EXCLUDE_FROM_ALL"))
+				if (!target->GetPropertyAsBool("EXCLUDE_FROM_ALL"))
 				{
 					perConfig[configName].push_back(aliasName);
 				}
