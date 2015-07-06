@@ -124,7 +124,6 @@
 #include <assert.h>
 
 static const char fastbuildGeneratorName[] = "Fastbuild";
-#define FASTBUILD_DOLLAR_LOOPHOLE "(FASTbuild_Dollar_Symbol)"
 
 class cmGlobalFastbuildGenerator::Factory 
 	: public cmGlobalGeneratorFactory
@@ -321,8 +320,8 @@ public:
 #endif
 		std::string cmdOut = cmd.str();
 
-		// Replace the Fastbuild dollar symbol with $
-		cmSystemTools::ReplaceString(cmdOut, FASTBUILD_DOLLAR_LOOPHOLE, "$");
+		// Unescape the Fastbuild configName symbol with $
+		cmSystemTools::ReplaceString(cmdOut, "$$ConfigName$$", "$ConfigName$");
 
 		return cmdOut;
 	}
@@ -1188,6 +1187,37 @@ public:
 			orderedTargets.end());
 	}
 
+	static bool isConfigDependant(const cmCustomCommandGenerator& ccg)
+	{
+		typedef std::vector<std::string> StringVector;
+		const StringVector &outputs = ccg.GetOutputs();
+		const StringVector &byproducts = ccg.GetByproducts();
+		
+		// Make sure that the outputs don't depend on the config name
+		for (StringVector::const_iterator iter = outputs.begin();
+			iter != outputs.end();
+			++iter)
+		{
+			const std::string & str = *iter;
+			if (str.find("$ConfigName$") != std::string::npos)
+			{
+				return true;
+			}
+		}
+		for (StringVector::const_iterator iter = byproducts.begin();
+			iter != byproducts.end();
+			++iter)
+		{
+			const std::string & str = *iter;
+			if (str.find("$ConfigName$") != std::string::npos)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 private:
 
 };
@@ -1613,7 +1643,8 @@ public:
 			// Check if this custom command has already been output.
 			// If it has then just drop an alias here to the original
 			CustomCommandAliasMap::iterator findResult = context.customCommandAliases.find(cc);
-			if (findResult != context.customCommandAliases.end())
+			if (findResult != context.customCommandAliases.end() &&
+				!Detection::isConfigDependant(ccg))
 			{
 				// This command has already been generated. 
 				// So just drop an alias.
@@ -1717,7 +1748,7 @@ public:
 			{
 				mergedOutputs.push_back("dummy-out-" + targetName);
 			}
-			context.fc.WriteVariable("ExecOutput", Quote(Join(mergedOutputs, ",")));
+			context.fc.WriteVariable("ExecOutput", Quote(mergedOutputs[0]));
 			
 		}
 		context.fc.WritePopScope();
@@ -2593,7 +2624,7 @@ void cmGlobalFastbuildGenerator::ComputeTargetObjectDirectory(
 //----------------------------------------------------------------------------
 const char* cmGlobalFastbuildGenerator::GetCMakeCFGIntDir() const
 {
-	return FASTBUILD_DOLLAR_LOOPHOLE "ConfigName" FASTBUILD_DOLLAR_LOOPHOLE;
+	return "$ConfigName$";
 }
 
 //----------------------------------------------------------------------------
