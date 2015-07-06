@@ -54,9 +54,7 @@
 
 	86% tests passed, 52 tests failed out of 368
 
-	44 - ObjectLibrary (Failed)
 	48 - ExternalOBJ (Failed)
-	49 - LoadCommand (Failed)
 	50 - LinkDirectory (Failed)
 	58 - SourceGroups (Failed)
 	59 - Preprocess (Failed)
@@ -908,13 +906,23 @@ public:
 				const cmTarget* objectTarget = gg->FindTarget(objectLib);
 				if (objectTarget)
 				{
-					objectLibs.insert(objectTarget->GetName() + "-" + configName);
+					objectLibs.insert(objectTarget->GetName() + "-" + configName + "-products");
 				}
 			}
 		}
 
 		std::copy(objectLibs.begin(), objectLibs.end(),
 			std::back_inserter(dependencies) );
+
+		// Now add the external obj files that also need to be linked in
+		std::vector<const cmSourceFile*> objFiles;
+		gt->GetExternalObjects(objFiles, configName);
+		for (std::vector<const cmSourceFile*>::const_iterator
+			i = objFiles.begin(); i != objFiles.end(); ++i)
+		{
+			const cmSourceFile* sourceFile = *i;
+			dependencies.push_back(sourceFile->GetFullPath());
+		}
 	}
 
 	struct DependencySorter
@@ -2208,7 +2216,6 @@ public:
 					{
 						std::vector<std::string> dependencies;
 						Detection::DetectTargetObjectDependencies( context.self, target, configName, dependencies );
-						dependencies = Wrap(dependencies, "", "-products");
 						Detection::DetectTargetLinkDependencies(context.self, target, configName, dependencies);
 
 						context.fc.WriteArray("Libraries", 
