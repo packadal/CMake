@@ -917,28 +917,6 @@ public:
 			std::back_inserter(dependencies) );
 	}
 
-	struct TargetCompare
-	{
-		bool operator()(cmTarget const* l, cmTarget const* r) const
-		{
-			// Make sure ALL_BUILD is first so it is the default active project.
-			if(r->GetName() == "ALL_BUILD")
-			{
-				return false;
-			}
-			if(l->GetName() == "ALL_BUILD")
-			{
-				return true;
-			}
-
-			// Now look to see if either depends on the other recursively
-			
-
-			// Fall back to ordering by name
-			return strcmp(l->GetName().c_str(), r->GetName().c_str()) < 0;
-		}
-	};
-
 	struct DependencySorter
 	{
 		struct TargetHelper
@@ -2431,7 +2409,11 @@ public:
 				std::string aliasName = targetName + "-" + configName;
 
 				perTarget[targetName].push_back(aliasName);
-				perConfig[configName].push_back(aliasName);
+
+				if (target->GetPropertyAsBool("EXCLUDE_FROM_ALL"))
+				{
+					perConfig[configName].push_back(aliasName);
+				}
 			}
 		}
 
