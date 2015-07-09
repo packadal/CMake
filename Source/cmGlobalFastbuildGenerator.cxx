@@ -1733,7 +1733,7 @@ public:
 			{
 				mergedOutputs.push_back("dummy-out-" + targetName);
 			}
-			context.fc.WriteVariable("ExecOutput", Quote(mergedOutputs[0]));
+			context.fc.WriteVariable("ExecOutput", Quote(Join(mergedOutputs, ";")));
 			
 		}
 		context.fc.WritePopScope();
@@ -2032,6 +2032,35 @@ public:
 				context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
 				context.fc.WriteCommand("Using", ".CustomCommands_" + configName);
 
+				context.fc.WriteBlankLine();
+				context.fc.WriteComment("Compiler options:");
+				{
+					// Tie together the variables
+					std::string targetCompileOutDirectory =
+						Detection::DetectTargetCompileOutputDir(lg, target, configName);
+					context.fc.WriteVariable("CompilerOutputPath", Quote(targetCompileOutDirectory));
+
+					std::string compileObjectCmd = Detection::DetectCompileRule(lg, target, objectGroupLanguage);
+					//context.fc.WriteVariable("CompilerRuleCmd", Quote( compileObjectCmd ));
+				}
+
+				// Compiler options
+				std::string baseCompileFlags;
+				{
+					// Remove the command from the front and leave the flags behind
+					std::string compileCmd;
+					Detection::DetectBaseCompileCommand(compileCmd,
+						lg, target, objectGroupLanguage);
+
+					std::string executable;
+					Detection::SplitExecutableAndFlags(compileCmd, executable, baseCompileFlags);
+
+					context.fc.WriteVariable("CompilerCmdBaseFlags", Quote(baseCompileFlags));
+
+					std::string compilerName = ".Compiler_" + objectGroupLanguage;
+					context.fc.WriteVariable("Compiler", compilerName);
+				}
+
 				struct CompileCommand
 				{
 					std::string defines;
@@ -2052,6 +2081,11 @@ public:
 					Detection::FilterSourceFiles(filteredObjectSources, objectSources,
 						objectGroupLanguage);
 
+					// Figure out the compilation commands for all
+					// the translation units in the compilation.
+					// Detect if one of them is a PreCompiledHeader
+					// and extract it to be used in a precompiled header
+					// generation step.
 					for (std::vector<cmSourceFile const*>::iterator sourceIter = filteredObjectSources.begin();
 						sourceIter != filteredObjectSources.end(); ++sourceIter)
 					{
@@ -2071,35 +2105,6 @@ public:
 						command.flags = compilerFlags;
 						command.defines = compileDefines;
 					}
-				}
-
-				context.fc.WriteBlankLine();
-				context.fc.WriteComment("Compiler options:");
-				{
-					// Tie together the variables
-					std::string targetCompileOutDirectory = 
-						Detection::DetectTargetCompileOutputDir(lg, target, configName);
-					context.fc.WriteVariable("CompilerOutputPath", Quote(targetCompileOutDirectory));
-
-					std::string compileObjectCmd = Detection::DetectCompileRule(lg, target, objectGroupLanguage);
-					//context.fc.WriteVariable("CompilerRuleCmd", Quote( compileObjectCmd ));
-				}
-
-				// Compiler options
-				{
-					// Remove the command from the front and leave the flags behind
-					std::string compileCmd;
-					Detection::DetectBaseCompileCommand(compileCmd,
-						lg, target, objectGroupLanguage);
-
-					std::string executable;
-					std::string flags;
-					Detection::SplitExecutableAndFlags(compileCmd, executable, flags);
-
-					context.fc.WriteVariable("CompilerCmdBaseFlags", Quote(flags));
-
-					std::string compilerName = ".Compiler_" + objectGroupLanguage;
-					context.fc.WriteVariable("Compiler", compilerName);
 				}
 
 				// Iterate over all subObjectGroups
@@ -2128,6 +2133,13 @@ public:
 					context.fc.WriteVariable("CompileFlags", Quote( command.flags ));
 					context.fc.WriteVariable("CompilerOptions", Quote("$CompileFlags$ $CompileDefineFlags$ $CompilerCmdBaseFlags$"));
 
+					/*
+					if (Detection::DetectPrecompiledHeader(command.flags + " " + 
+						baseCompileFlags + " " + command.defines,
+						preCompiledHeaderInput,
+						preCompiledHeaderOutput,
+						preCompiledHeaderOptions)
+					*/
 					context.fc.WritePopScope();
 
 				}
