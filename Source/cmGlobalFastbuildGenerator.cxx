@@ -1722,12 +1722,12 @@ public:
 		{
 			context.fc.WriteVariable("ExecExecutable", Quote(executable));
 			context.fc.WriteVariable("ExecArguments", Quote(args));
-			context.fc.WriteVariable("ExecInput", "'dummy-in'");
-			if (!inputs.empty())
+
+			if (inputs.empty())
 			{
-				context.fc.WriteArray("ExecAdditionalDependencies",
-					Wrap(inputs));
+				inputs.push_back("dummy-in");
 			}
+			context.fc.WriteArray("ExecInput", Wrap(inputs));
 			
 			if (mergedOutputs.empty())
 			{
