@@ -920,7 +920,10 @@ public:
 			i = objFiles.begin(); i != objFiles.end(); ++i)
 		{
 			const cmSourceFile* sourceFile = *i;
-			dependencies.push_back(sourceFile->GetFullPath());
+			if (sourceFile->GetObjectLibrary().empty())
+			{
+				dependencies.push_back(sourceFile->GetFullPath());
+			}
 		}
 	}
 
