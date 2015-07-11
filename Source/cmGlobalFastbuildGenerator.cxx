@@ -1602,10 +1602,24 @@ public:
 		return launcher;
 	}
 
+	struct SourceFileNameIs
+	{
+		SourceFileNameIs(const std::string& name)
+		: m_name(name) {}
+
+		std::string m_name;
+
+		bool operator()(const cmSourceFile* sf) const
+		{
+			return sf->GetFullPath() == m_name;
+		}
+	};
+
 	static void WriteCustomCommand(
 		GenerationContext& context,
 		const cmCustomCommand* cc,
 		cmLocalFastbuildGenerator *lg,
+		cmTarget& target,
 		const std::string& configName,
 		const std::string& targetName)
 	{
@@ -1619,6 +1633,41 @@ public:
 		std::vector<std::string> mergedOutputs;
 		mergedOutputs.insert(mergedOutputs.end(), outputs.begin(), outputs.end());
 		mergedOutputs.insert(mergedOutputs.end(), byproducts.begin(), byproducts.end());
+
+		// TODO: Double check that none of the outputs are 'symbolic'
+		// In which case, FASTBuild won't want them treated as 
+		// outputs.
+		{
+			cmGeneratorTarget *gt = context.self->GetGeneratorTarget(&target);
+			std::vector<cmSourceFile*> sourceFiles;
+			gt->GetSourceFiles(sourceFiles, configName);
+
+			// Loop through all outputs, and attempt to find it in the 
+			// source files.
+			for (size_t index = 0; index < mergedOutputs.size(); ++index)
+			{
+				const std::string& outputName = mergedOutputs[index];
+
+				std::vector<cmSourceFile*>::iterator findResult = std::find_if(
+					sourceFiles.begin(), sourceFiles.end(), SourceFileNameIs(outputName));
+
+				if (findResult == sourceFiles.end())
+				{
+					continue;
+				}
+				cmSourceFile* outputSourceFile = *findResult;
+
+				// Check if this file is symbolic
+				if (outputSourceFile->GetPropertyAsBool("SYMBOLIC"))
+				{
+					// We need to remove this file from the list of outputs
+					// Swap with back and pop
+					mergedOutputs[index] = mergedOutputs.back();
+					mergedOutputs.pop_back();
+				}
+			}
+		}
+
 		std::vector<std::string> inputs;
 		std::vector<std::string> orderDependencies;
 
@@ -1732,8 +1781,13 @@ public:
 			}
 			context.fc.WriteArray("ExecInput", Wrap(inputs));
 			
+			// Currently fastbuild doesn't support more than 1
+			// output for a custom command (soon to change hopefully).
+			assert(mergedOutputs.size() <= 1);
+
 			if (mergedOutputs.empty())
 			{
+				context.fc.WriteVariable("ExecUseStdOutAsOutput", "true");
 				mergedOutputs.push_back("dummy-out-" + targetName);
 			}
 			context.fc.WriteVariable("ExecOutput", Quote(Join(mergedOutputs, ";")));
@@ -1745,15 +1799,17 @@ public:
 	static void WriteCustomBuildSteps(
 		GenerationContext& context,
 		cmLocalFastbuildGenerator *lg,
+		cmTarget &target,
 		const std::vector<cmCustomCommand>& commands,
 		const std::string& buildStep,
-		const std::string& targetName,
 		const std::vector<std::string>& orderDeps)
 	{
 		if (commands.empty())
 		{
 			return;
 		}
+
+		const std::string& targetName = target.GetName();
 
 		// Now output the commands
 		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
@@ -1782,7 +1838,7 @@ public:
 				customCommandTargetName << baseName << (commandCount++);
 				customCommandTargets.push_back(customCommandTargetName.str());
 
-				WriteCustomCommand(context, &cc, lg, configName, customCommandTargetName.str());
+				WriteCustomCommand(context, &cc, lg, target, configName, customCommandTargetName.str());
 			}
 
 			// Write an alias for this object group to group them all together
@@ -1847,7 +1903,7 @@ public:
 					customCommandTargets.push_back(customCommandTargetName.str());
 
 					WriteCustomCommand(context, sourceFile->GetCustomCommand(),
-						lg, configName, customCommandTargetName.str());
+						lg, target, configName, customCommandTargetName.str());
 				}
 
 				std::string customCommandGroupName = targetName + "-CustomCommands-" + configName;
@@ -1926,8 +1982,8 @@ public:
 		Detection::DetectTargetCompileDependencies(context.self, target, dependencies);
 
 		// Output the prebuild/Prelink commands
-		WriteCustomBuildSteps(context, lg, target.GetPreBuildCommands(), "PreBuild", targetName, dependencies);
-		WriteCustomBuildSteps(context, lg, target.GetPreBuildCommands(), "PreLink", targetName, dependencies);
+		WriteCustomBuildSteps(context, lg, target, target.GetPreBuildCommands(), "PreBuild", dependencies);
+		WriteCustomBuildSteps(context, lg, target, target.GetPreLinkCommands(), "PreLink", dependencies);
 
 		// Iterate over each configuration
 		// This time to define linker settings for each config
@@ -2286,7 +2342,7 @@ public:
 		}
 
 		// Output the postbuild commands
-		WriteCustomBuildSteps(context, lg, target.GetPostBuildCommands(), "PostBuild", targetName,
+		WriteCustomBuildSteps(context, lg, target, target.GetPostBuildCommands(), "PostBuild", 
 			Wrap(orderDeps, targetName + "-", ""));
 
 		// Always add the pre/post build steps as
