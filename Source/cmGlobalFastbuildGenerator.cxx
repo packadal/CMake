@@ -52,42 +52,38 @@
 
   Current list of unit tests failing:
 
-	86% tests passed, 52 tests failed out of 368
+	85% tests passed, 54 tests failed out of 368
+	Total Test time (real) = 2840.51 sec
 
-	48 - ExternalOBJ (Failed)
-	50 - LinkDirectory (Failed)
+	38 - MissingSourceFile (Failed)
 	58 - SourceGroups (Failed)
 	59 - Preprocess (Failed)
-	67 - AliasTarget (Failed)
-	69 - InterfaceLibrary (Failed)
+	60 - ExportImport (Failed)
+	63 - EmptyLibrary (Failed)
+	68 - StagingPrefix (Failed)
 	70 - ConfigSources (Failed)
 	78 - Module.ExternalData (Failed)
 	79 - Module.GenerateExportHeader (Failed)
+	100 - SubProject (Failed)
 	101 - SubProject-Stage2 (Failed)
-	103 - TargetName (Failed)
-	105 - CustComDepend (Failed)
+	107 - GeneratorExpression (Failed)
 	108 - CustomCommand (Failed)
 	109 - CustomCommandByproducts (Failed)
-	110 - EmptyDepends (Failed)
-	111 - CustomCommandWorkingDirectory (Failed)
 	112 - OutOfSource (Failed)
 	113 - BuildDepends (Failed)
 	114 - SimpleInstall (Failed)
 	115 - SimpleInstall-Stage2 (Failed)
-	116 - MissingInstall (Failed)
-	126 - LoadedCommandOneConfig (Failed)
 	127 - complex (Failed)
 	128 - complexOneConfig (Failed)
 	131 - ExternalProject (Failed)
 	132 - ExternalProjectLocal (Failed)
 	133 - ExternalProjectUpdateSetup (Failed)
-	149 - JumpWithLibOut (Failed)
-	150 - JumpNoLibOut (Failed)
+	134 - ExternalProjectUpdate (Failed)
 	151 - Plugin (Failed)
 	154 - SubDir (Failed)
+	156 - PDBDirectoryAndName (Failed)
 	157 - PrecompiledHeader (Failed)
 	158 - ModuleDefinition (Failed)
-	167 - CTest.BuildCommand.ProjectInSubdir (Failed)
 	182 - CTestConfig.Script.Debug (Failed)
 	183 - CTestConfig.Dashboard.Debug (Failed)
 	184 - CTestConfig.Script.MinSizeRel (Failed)
@@ -100,10 +96,19 @@
 	221 - Java (Failed)
 	223 - IncludeDirectories (Failed)
 	237 - CMakeOnly.CheckStructHasMember (Failed)
+	252 - RunCMake.CMP0019 (Failed)
+	257 - RunCMake.CMP0037 (Failed)
+	264 - RunCMake.CMP0046 (Failed)
 	274 - RunCMake.Configure (Failed)
+	276 - RunCMake.ExternalData (Failed)
 	279 - RunCMake.GeneratorExpression (Failed)
-	288 - RunCMake.CompileFeatures (Failed)
+	283 - RunCMake.Languages (Failed)
+	284 - RunCMake.ObjectLibrary (Failed)
+	311 - RunCMake.get_property (Failed)
+	324 - RunCMake.CMP0004 (Failed)
+	327 - RunCMake.interface_library (Failed)
 	330 - RunCMake.File_Generate (Failed)
+	331 - RunCMake.ExportWithoutLanguage (Failed)
 ============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"
 
@@ -564,6 +569,11 @@ public:
 	{
 		cmMakefile* pMakefile = lg->GetMakefile();
 		cmComputeLinkInformation* pcli = target.GetLinkInformation(configName);
+		if (!pcli)
+		{
+			// No link information, then no linker library paths
+			return;
+		}
 		cmComputeLinkInformation& cli = *pcli;
 
 		std::string libPathFlag =
