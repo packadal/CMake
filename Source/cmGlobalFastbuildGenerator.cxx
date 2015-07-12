@@ -556,6 +556,47 @@ public:
 		return definesString;
 	}
 
+	static void DetectLinkerLibPaths(
+		std::string& linkerLibPath,
+		cmLocalFastbuildGenerator *lg,
+		cmTarget &target,
+		const std::string & configName )
+	{
+		cmMakefile* pMakefile = lg->GetMakefile();
+		cmComputeLinkInformation* pcli = target.GetLinkInformation(configName);
+		cmComputeLinkInformation& cli = *pcli;
+
+		std::string libPathFlag =
+			pMakefile->GetRequiredDefinition("CMAKE_LIBRARY_PATH_FLAG");
+		std::string libPathTerminator =
+			pMakefile->GetSafeDefinition("CMAKE_LIBRARY_PATH_TERMINATOR");
+
+		// Append the library search path flags.
+		std::vector<std::string> const& libDirs = cli.GetDirectories();
+		for (std::vector<std::string>::const_iterator libDir = libDirs.begin();
+			libDir != libDirs.end(); ++libDir)
+		{
+			std::string libpath = lg->ConvertToOutputForExisting(*libDir,
+				cmLocalGenerator::START_OUTPUT,
+				cmLocalGenerator::SHELL);
+			cmSystemTools::ConvertToOutputSlashes(libpath);
+
+			// Add the linker lib path twice, once raw, then once with
+			// the configname attached
+			std::string configlibpath = libpath + "/" + configName;
+			cmSystemTools::ConvertToOutputSlashes(configlibpath);
+
+			linkerLibPath += " " + libPathFlag;
+			linkerLibPath += libpath;
+			linkerLibPath += libPathTerminator;
+
+			linkerLibPath += " " + libPathFlag;
+			linkerLibPath += configlibpath;
+			linkerLibPath += libPathTerminator;
+			linkerLibPath += " ";
+		}
+	}
+
 	static bool DetectBaseLinkerCommand(std::string & command,
 		cmLocalFastbuildGenerator *lg,
 		cmTarget &target,
@@ -2249,16 +2290,19 @@ public:
 					std::string targetFlags;
 					std::string linkFlags;
 					std::string frameworkPath;
-					std::string linkPath;
+					std::string dummyLinkPath;
 
 					lg->GetTargetFlags(
 						linkLibs,
 						targetFlags,
 						linkFlags,
 						frameworkPath,
-						linkPath,
+						dummyLinkPath,
 						gt,
 						false);
+
+					std::string linkPath;
+					Detection::DetectLinkerLibPaths(linkPath, lg, target, configName);
 
 					linkPath = frameworkPath + linkPath;
 
