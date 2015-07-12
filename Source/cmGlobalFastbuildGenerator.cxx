@@ -1788,7 +1788,9 @@ public:
 			if (mergedOutputs.empty())
 			{
 				context.fc.WriteVariable("ExecUseStdOutAsOutput", "true");
-				mergedOutputs.push_back("dummy-out-" + targetName);
+
+				std::string outputDir = target.GetMakefile()->GetStartOutputDirectory();
+				mergedOutputs.push_back(outputDir + "/dummy-out-" + targetName + ".txt");
 			}
 			context.fc.WriteVariable("ExecOutput", Quote(Join(mergedOutputs, ";")));
 			
