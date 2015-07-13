@@ -39,6 +39,12 @@ public:
   virtual void ComputeTargetObjectDirectory(cmGeneratorTarget*) const;
   virtual const char* GetCMakeCFGIntDir() const;
 
+  virtual void GetTargetSets(TargetDependSet& projectTargets,
+                             TargetDependSet& originalTargets,
+                             cmLocalGenerator* root, GeneratorVector const&);
+
+  const std::vector<std::string>& GetConfigurations() const;
+
 private:
   class Factory;
   class Detail;
