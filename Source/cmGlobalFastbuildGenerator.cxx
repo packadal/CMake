@@ -52,29 +52,27 @@
 
   Current list of unit tests failing:
 
-	85% tests passed, 54 tests failed out of 368
-	Total Test time (real) = 2840.51 sec
+	87% tests passed, 47 tests failed out of 368
+	Total Test time (real) = 20260.19 sec
 
-	38 - MissingSourceFile (Failed)
 	58 - SourceGroups (Failed)
 	59 - Preprocess (Failed)
 	60 - ExportImport (Failed)
-	63 - EmptyLibrary (Failed)
 	68 - StagingPrefix (Failed)
 	70 - ConfigSources (Failed)
-	78 - Module.ExternalData (Failed)
+	78 - Module.ExternalData (Timeout)
 	79 - Module.GenerateExportHeader (Failed)
 	100 - SubProject (Failed)
 	101 - SubProject-Stage2 (Failed)
 	107 - GeneratorExpression (Failed)
-	108 - CustomCommand (Failed)
-	109 - CustomCommandByproducts (Failed)
+	108 - CustomCommand (Timeout)
+	109 - CustomCommandByproducts (Timeout)
 	112 - OutOfSource (Failed)
-	113 - BuildDepends (Failed)
+	113 - BuildDepends (Timeout)
 	114 - SimpleInstall (Failed)
 	115 - SimpleInstall-Stage2 (Failed)
-	127 - complex (Failed)
-	128 - complexOneConfig (Failed)
+	127 - complex (Timeout)
+	128 - complexOneConfig (Timeout)
 	131 - ExternalProject (Failed)
 	132 - ExternalProjectLocal (Failed)
 	133 - ExternalProjectUpdateSetup (Failed)
@@ -96,19 +94,14 @@
 	221 - Java (Failed)
 	223 - IncludeDirectories (Failed)
 	237 - CMakeOnly.CheckStructHasMember (Failed)
-	252 - RunCMake.CMP0019 (Failed)
-	257 - RunCMake.CMP0037 (Failed)
-	264 - RunCMake.CMP0046 (Failed)
+	252 - RunCMake.CMP0019 (Timeout)
+	257 - RunCMake.CMP0037 (Timeout)
+	264 - RunCMake.CMP0046 (Timeout)
 	274 - RunCMake.Configure (Failed)
-	276 - RunCMake.ExternalData (Failed)
-	279 - RunCMake.GeneratorExpression (Failed)
-	283 - RunCMake.Languages (Failed)
-	284 - RunCMake.ObjectLibrary (Failed)
-	311 - RunCMake.get_property (Failed)
-	324 - RunCMake.CMP0004 (Failed)
-	327 - RunCMake.interface_library (Failed)
+	276 - RunCMake.ExternalData (Timeout)
+	284 - RunCMake.ObjectLibrary (Timeout)
+	311 - RunCMake.get_property (Timeout)
 	330 - RunCMake.File_Generate (Failed)
-	331 - RunCMake.ExportWithoutLanguage (Failed)
 ============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"
 
