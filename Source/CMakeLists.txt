@@ -658,8 +658,6 @@ if (WIN32)
       cmGlobalVisualStudio15Generator.h
       cmGlobalVisualStudio15Generator.cxx
       cmGlobalVisualStudioGenerator.cxx
-      cmGlobalFastbuildGenerator.h
-      cmGlobalFastbuildGenerator.cxx
       cmGlobalGenerator.h
       cmIDEFlagTable.h
       cmIDEOptions.cxx
@@ -668,8 +666,6 @@ if (WIN32)
       cmLocalVisualStudio7Generator.h
       cmLocalVisualStudioGenerator.cxx
       cmLocalVisualStudioGenerator.h
-      cmLocalFastbuildGenerator.cxx
-      cmLocalFastbuildGenerator.h
       cmVisualStudioSlnData.h
       cmVisualStudioSlnData.cxx
       cmVisualStudioSlnParser.h
@@ -723,6 +719,13 @@ set(SRCS ${SRCS}
 # Temporary variable for tools targets
 set(_tools)
 
+# Fastbuild support
+set(SRCS ${SRCS}
+  cmGlobalFastbuildGenerator.h
+  cmGlobalFastbuildGenerator.cxx
+  cmLocalFastbuildGenerator.cxx
+  cmLocalFastbuildGenerator.h
+  )
 if(WIN32 AND NOT CYGWIN)
   set_source_files_properties(cmcldeps.cxx PROPERTIES COMPILE_DEFINITIONS _WIN32_WINNT=0x0501)
   add_executable(cmcldeps cmcldeps.cxx ${MANIFEST_FILE})
