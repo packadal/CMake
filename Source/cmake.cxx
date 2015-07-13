@@ -59,7 +59,6 @@
 #    include "cmGlobalVisualStudio11Generator.h"
 #    include "cmGlobalVisualStudio12Generator.h"
 #    include "cmGlobalVisualStudio14Generator.h"
-#	 include "cmGlobalFastbuildGenerator.h"
 #    include "cmGlobalBorlandMakefileGenerator.h"
 #    include "cmGlobalNMakeMakefileGenerator.h"
 #    include "cmGlobalJOMMakefileGenerator.h"
@@ -75,6 +74,7 @@
 #include "cmGlobalUnixMakefileGenerator3.h"
 #include "cmGlobalNinjaGenerator.h"
 #include "cmExtraCodeLiteGenerator.h"
+#include "cmGlobalFastbuildGenerator.h"
 
 #if !defined(CMAKE_BOOT_MINGW)
 # include "cmExtraCodeBlocksGenerator.h"
