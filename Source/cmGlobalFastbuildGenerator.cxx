@@ -2443,9 +2443,8 @@ public:
 				context.fc.WriteArray("Targets",
 					Wrap(orderDeps, "'" + targetName + "-", "-" + configName + "'"),
 					"+");
+				context.fc.WritePopScope();
 			}
-			
-			context.fc.WritePopScope();
 		}
 	}
 
