@@ -15,7 +15,9 @@
 #include "cmSourceFile.h"
 #include "cmSystemTools.h"
 #include "cmCustomCommandGenerator.h"
+#ifdef _WIN32
 #include "windows.h"
+#endif
 
 //----------------------------------------------------------------------------
 cmLocalFastbuildGenerator::cmLocalFastbuildGenerator()

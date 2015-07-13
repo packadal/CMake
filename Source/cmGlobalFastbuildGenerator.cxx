@@ -1045,7 +1045,7 @@ public:
 
 			// Build up a map of outputNames to entries
 			OutputMap outputMap;
-			for (OrderedEntrySet::iterator iter = entries.begin();
+			for (typename OrderedEntrySet::iterator iter = entries.begin();
 				iter != entries.end();
 				++iter)
 			{
@@ -1064,10 +1064,10 @@ public:
 			// Now build a forward and reverse map of dependencies
 			// Build the reverse graph, 
 			// each target, and the set of things that depend upon it
-			typedef std::map<const TType*, std::vector<const TType*>> DepMap;
+			typedef std::map<const TType*, std::vector<const TType*> > DepMap;
 			DepMap forwardDeps;
 			DepMap reverseDeps;
-			for (OrderedEntrySet::iterator iter = entries.begin();
+			for (typename OrderedEntrySet::iterator iter = entries.begin();
 				iter != entries.end();
 				++iter)
 			{
@@ -1082,7 +1082,7 @@ public:
 				{
 					const std::string& input = *inIter;
 					// Lookup the input in the output map and find the right entry
-					OutputMap::iterator findResult = outputMap.find(input);
+					typename OutputMap::iterator findResult = outputMap.find(input);
 					if (findResult != outputMap.end())
 					{
 						const TType* dentry = findResult->second;
@@ -1102,7 +1102,7 @@ public:
 			while (!forwardDeps.empty() && written)
 			{
 				written = false;
-				for (DepMap::iterator iter = forwardDeps.begin();
+				for (typename DepMap::iterator iter = forwardDeps.begin();
 					iter != forwardDeps.end(); ++iter)
 				{
 					std::vector<const TType*>& fwdDeps = iter->second;
@@ -1190,30 +1190,30 @@ public:
 		DependencySorter::Sort(targetHelper, orderedTargets);
 	}
 
+	// Iterate over all targets and remove the ones that are
+	// not needed for generation.
+	// i.e. the nested global targets
+	struct RemovalTest
+	{
+		bool operator()(const cmTarget* target) const
+		{
+			if (target->GetType() == cmTarget::GLOBAL_TARGET)
+			{
+				// We only want to process global targets that live in the home
+				// (i.e. top-level) directory.  CMake creates copies of these targets
+				// in every directory, which we don't need.
+				cmMakefile *mf = target->GetMakefile();
+				if (strcmp(mf->GetStartDirectory(), mf->GetHomeDirectory()) != 0)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+	};
+
 	static void StripNestedGlobalTargets( OrderedTargetSet& orderedTargets )
 	{
-		// Iterate over all targets and remove the ones that are 
-		// not needed for generation.
-		// i.e. the nested global targets
-		struct RemovalTest
-		{
-			bool operator()(const cmTarget* target) const
-			{
-				if (target->GetType() == cmTarget::GLOBAL_TARGET)
-				{
-					// We only want to process global targets that live in the home
-					// (i.e. top-level) directory.  CMake creates copies of these targets
-					// in every directory, which we don't need.
-					cmMakefile *mf = target->GetMakefile();
-					if (strcmp(mf->GetStartDirectory(), mf->GetHomeDirectory()) != 0)
-					{
-						return true;
-					}
-				}
-				return false;
-			}
-		};
-
 		orderedTargets.erase(
 			std::remove_if(orderedTargets.begin(), orderedTargets.end(), RemovalTest()),
 			orderedTargets.end());
@@ -1329,20 +1329,20 @@ public:
 		return stringstream.str();
 	}
 
+	struct WrapHelper
+	{
+		std::string m_prefix;
+		std::string m_suffix;
+
+		std::string operator()(const std::string& in)
+		{
+			return m_prefix + in + m_suffix;
+		}
+	};
+
 	static std::vector<std::string> Wrap(const std::vector<std::string>& in, const std::string& prefix = "'", const std::string& suffix = "'")
 	{
 		std::vector<std::string> result;
-
-		struct WrapHelper
-		{
-			std::string m_prefix;
-			std::string m_suffix;
-
-			std::string operator()(const std::string& in)
-			{
-				return m_prefix + in + m_suffix;
-			}
-		};
 
 		WrapHelper helper = {prefix, suffix};
 
@@ -1977,6 +1977,13 @@ public:
 		return hasCustomCommands;
 	}
 
+	struct CompileCommand
+	{
+		std::string defines;
+		std::string flags;
+		std::vector<std::string> sourceFiles;
+	};
+
 	static void WriteTargetDefinition(GenerationContext& context,
 		cmLocalFastbuildGenerator *lg, cmTarget &target)
 	{
@@ -2166,13 +2173,7 @@ public:
 					context.fc.WriteVariable("Compiler", compilerName);
 				}
 
-				struct CompileCommand
-				{
-					std::string defines;
-					std::string flags;
-					std::vector<std::string> sourceFiles;
-				};
-				std::map<std::string,CompileCommand> commandPermutations; 
+				std::map<std::string,CompileCommand> commandPermutations;
 
 				// Source files
 				context.fc.WriteBlankLine();
@@ -2506,7 +2507,7 @@ public:
 		// Per Config
 		// All
 
-		typedef std::map<std::string, std::vector<std::string>> TargetListMap;
+		typedef std::map<std::string, std::vector<std::string> > TargetListMap;
 		TargetListMap perConfig;
 		TargetListMap perTarget;
 
