@@ -52,9 +52,10 @@
 
   Current list of unit tests failing:
 
-	87% tests passed, 47 tests failed out of 368
-	Total Test time (real) = 20260.19 sec
+	89% tests passed, 41 tests failed out of 368
+	Total Test time (real) = 8386.39 sec
 
+	The following tests FAILED:
 	58 - SourceGroups (Failed)
 	59 - Preprocess (Failed)
 	60 - ExportImport (Failed)
@@ -71,8 +72,8 @@
 	113 - BuildDepends (Timeout)
 	114 - SimpleInstall (Failed)
 	115 - SimpleInstall-Stage2 (Failed)
-	127 - complex (Timeout)
-	128 - complexOneConfig (Timeout)
+	127 - complex (Failed)
+	128 - complexOneConfig (Failed)
 	131 - ExternalProject (Failed)
 	132 - ExternalProjectLocal (Failed)
 	133 - ExternalProjectUpdateSetup (Failed)
@@ -94,13 +95,7 @@
 	221 - Java (Failed)
 	223 - IncludeDirectories (Failed)
 	237 - CMakeOnly.CheckStructHasMember (Failed)
-	252 - RunCMake.CMP0019 (Timeout)
-	257 - RunCMake.CMP0037 (Timeout)
-	264 - RunCMake.CMP0046 (Timeout)
 	274 - RunCMake.Configure (Failed)
-	276 - RunCMake.ExternalData (Timeout)
-	284 - RunCMake.ObjectLibrary (Timeout)
-	311 - RunCMake.get_property (Timeout)
 	330 - RunCMake.File_Generate (Failed)
 ============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"
