@@ -1832,8 +1832,6 @@ void cmake::AddDefaultGenerators()
   this->Generators.push_back(
     cmGlobalVisualStudio9Generator::NewFactory());
   this->Generators.push_back(
-    cmGlobalFastbuildGenerator::NewFactory());
-  this->Generators.push_back(
     cmGlobalBorlandMakefileGenerator::NewFactory());
   this->Generators.push_back(
     cmGlobalNMakeMakefileGenerator::NewFactory());
@@ -1849,6 +1847,8 @@ void cmake::AddDefaultGenerators()
     cmGlobalUnixMakefileGenerator3::NewFactory());
   this->Generators.push_back(
     cmGlobalNinjaGenerator::NewFactory());
+  this->Generators.push_back(
+    cmGlobalFastbuildGenerator::NewFactory());
 #if defined(CMAKE_USE_WMAKE)
   this->Generators.push_back(
     cmGlobalWatcomWMakeGenerator::NewFactory());
