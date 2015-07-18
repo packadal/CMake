@@ -235,8 +235,8 @@ public:
 	{
 		WriteVariable(key, "", operation);
 		WritePushScope();
-		int size = values.size();
-		for (int index = 0; index < size; ++index)
+		size_t size = values.size();
+		for (size_t index = 0; index < size; ++index)
 		{
 			const std::string & value = values[index];
 			bool isLast = index == size - 1;
@@ -323,7 +323,7 @@ public:
 	{
 		// process the configurations
 		const char* configList =
-			self->CMakeInstance->GetCacheDefinition("CMAKE_CONFIGURATION_TYPES");
+			self->GetCMakeInstance()->GetCacheDefinition("CMAKE_CONFIGURATION_TYPES");
 		if (configList)
 		{
 			std::vector<std::string> argsOut;
@@ -379,7 +379,7 @@ public:
 
 	static void DetectOutput(
 		FastbuildTargetNames & targetNamesOut,
-		cmLocalFastbuildGenerator *lg,
+		cmLocalFastbuildGenerator * /*lg*/,
 		cmTarget &target,
 		const std::string & configName)
 	{
@@ -609,7 +609,7 @@ public:
 			return false;
 		}
 
-		cmTarget::TargetType targetType = target.GetType();
+		//cmTarget::TargetType targetType = target.GetType();
 
 		cmLocalGenerator::RuleVariables vars;
 		vars.RuleLauncher = "RULE_LAUNCH_LINK";
@@ -702,8 +702,7 @@ public:
 		for (std::vector<std::string>::iterator i = compileCmds.begin();
 			i != compileCmds.end(); ++i)
 		{
-			std::string & compileCmd = *i;
-			lg->ExpandRuleVariables(compileCmd, compileObjectVars);
+			lg->ExpandRuleVariables(*i, compileObjectVars);
 		}
 
 		command = BuildCommandLine(compileCmds);
@@ -762,10 +761,12 @@ public:
 
 		cmGeneratorTarget *gt = self->GetGeneratorTarget(&target);
 
-		for (std::vector<std::string>::iterator iter = self->Configurations.begin();
-			iter != self->Configurations.end(); ++iter)
+		std::vector<std::string>::const_iterator
+			iter = self->GetConfigurations().begin(),
+			end = self->GetConfigurations().end();
+		for (; iter != end; ++iter)
 		{
-			std::string & configName = *iter;
+			const std::string & configName = *iter;
 
 			std::vector<cmSourceFile*> sourceFiles;
 			gt->GetSourceFiles(sourceFiles, configName);
@@ -883,7 +884,7 @@ public:
 	}
 
 	static void DetectTargetLinkDependencies(
-		cmGlobalFastbuildGenerator* gg,
+		cmGlobalFastbuildGenerator * /*gg*/,
 		cmTarget& target, 
 		const std::string& configName,
 		std::vector<std::string>& dependencies)
@@ -1036,7 +1037,7 @@ public:
 			typedef std::vector<std::string> StringVector;
 			typedef std::vector<const TType*> OrderedEntrySet;
 			typedef std::map<std::string, const TType*> OutputMap;
-			typedef std::map<const TType*, StringVector> DependencyMap;
+			//typedef std::map<const TType*, StringVector> DependencyMap;
 
 			// Build up a map of outputNames to entries
 			OutputMap outputMap;
@@ -1156,10 +1157,12 @@ public:
 	{
 		TargetDependSet projectTargets;
 		TargetDependSet originalTargets;
-		std::map<std::string, std::vector<cmLocalGenerator*> >::iterator it;
-		for(it = gg->ProjectMap.begin(); it!= gg->ProjectMap.end(); ++it)
+		std::map<std::string, std::vector<cmLocalGenerator*> >::const_iterator
+			it = gg->GetProjectMap().begin(),
+			end = gg->GetProjectMap().end();
+		for(; it != end; ++it)
 		{
-			std::vector<cmLocalGenerator*>& generators = it->second;
+			const std::vector<cmLocalGenerator*>& generators = it->second;
 			cmLocalFastbuildGenerator* root =
 				static_cast<cmLocalFastbuildGenerator*>(generators[0]);
 			
@@ -1295,6 +1298,14 @@ public:
 
 	struct GenerationContext
 	{
+		GenerationContext(
+				cmGlobalFastbuildGenerator * globalGen,
+				cmLocalFastbuildGenerator* localGen,
+				FileContext& fileCtx)
+			: self(globalGen)
+			, root(localGen)
+			, fc(fileCtx)
+		{}
 		cmGlobalFastbuildGenerator * self;
 		cmLocalFastbuildGenerator* root;
 		FileContext& fc;
@@ -1373,15 +1384,17 @@ public:
 	static void BuildTargetContexts(cmGlobalFastbuildGenerator * gg,
 		TargetContextMap& map)
 	{
-		std::map<std::string, std::vector<cmLocalGenerator*> >::iterator it;
-		for(it = gg->ProjectMap.begin(); it!= gg->ProjectMap.end(); ++it)
+		std::map<std::string, std::vector<cmLocalGenerator*> >::const_iterator
+				it = gg->GetProjectMap().begin(),
+				end = gg->GetProjectMap().end();
+		for(; it != end; ++it)
 		{
-			std::vector<cmLocalGenerator*>& generators = it->second;
+			const std::vector<cmLocalGenerator*>& generators = it->second;
 			cmLocalFastbuildGenerator* root =
 				static_cast<cmLocalFastbuildGenerator*>(generators[0]);
 
 			// Build a map of all targets to their local generator
-			for (std::vector<cmLocalGenerator*>::iterator iter = generators.begin();
+			for (std::vector<cmLocalGenerator*>::const_iterator iter = generators.begin();
 				iter != generators.end(); ++iter)
 			{
 				cmLocalFastbuildGenerator *lg = static_cast<cmLocalFastbuildGenerator*>(*iter);
@@ -1434,8 +1447,7 @@ public:
 		}
 
 		FileContext fc(fout);
-		GenerationContext context =
-			{ self, root, fc };
+		GenerationContext context(self, root, fc);
 		Detection::ComputeTargetOrderAndDependencies( context.self, context.orderedTargets );
 		Detection::StripNestedGlobalTargets( context.orderedTargets );
 		BuildTargetContexts( context.self, context.targetContexts );
@@ -1903,9 +1915,11 @@ public:
 		const std::string& targetName = target.GetName();
 
 		// Iterating over all configurations
-		const char* customCommandGroupNamePrefix = "ObjectGroup_cmCustomCommands_";
-		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-			iter != context.self->Configurations.end(); ++iter)
+		//const char* customCommandGroupNamePrefix = "ObjectGroup_cmCustomCommands_";
+		std::vector<std::string>::const_iterator
+			iter = context.self->GetConfigurations().begin(),
+			end = context.self->GetConfigurations().end();
+		for (; iter != end; ++iter)
 		{
 			std::string configName = *iter;
 
@@ -2035,10 +2049,12 @@ public:
 
 		// Iterate over each configuration
 		// This time to define linker settings for each config
-		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-			iter != context.self->Configurations.end(); ++iter)
+		std::vector<std::string>::const_iterator
+				configIter = context.self->GetConfigurations().begin(),
+				configEnd = context.self->GetConfigurations().end();
+		for (; configIter != configEnd; ++configIter)
 		{
-			std::string configName = *iter;
+			std::string configName = *configIter;
 
 			context.fc.WriteVariable("BaseConfig_" + configName, "");
 			context.fc.WritePushScopeStruct();
@@ -2129,10 +2145,10 @@ public:
 			context.fc.WritePushScopeStruct();
 
 			// Iterating over all configurations
-			for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-				iter != context.self->Configurations.end(); ++iter)
+			configIter = context.self->GetConfigurations().begin();
+			for (; configIter != configEnd; ++configIter)
 			{
-				std::string configName = *iter;
+				std::string configName = *configIter;
 				context.fc.WriteVariable("ObjectConfig_" + configName, "");
 				context.fc.WritePushScopeStruct();
 
@@ -2266,8 +2282,10 @@ public:
 
 		// Iterate over each configuration
 		// This time to define linker settings for each config
-		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-			iter != context.self->Configurations.end(); ++iter)
+		std::vector<std::string>::const_iterator
+				iter = context.self->GetConfigurations().begin(),
+				end = context.self->GetConfigurations().end();
+		for (; iter != end; ++iter)
 		{
 			std::string configName = *iter;
 
@@ -2332,12 +2350,12 @@ public:
 
 					// Now detect the extra dependencies for linking
 					{
-						std::vector<std::string> dependencies;
-						Detection::DetectTargetObjectDependencies( context.self, target, configName, dependencies );
-						Detection::DetectTargetLinkDependencies(context.self, target, configName, dependencies);
+						std::vector<std::string> extraDependencies;
+						Detection::DetectTargetObjectDependencies( context.self, target, configName, extraDependencies );
+						Detection::DetectTargetLinkDependencies(context.self, target, configName, extraDependencies);
 
 						context.fc.WriteArray("Libraries", 
-							Wrap(dependencies, "'", "'"), 
+							Wrap(extraDependencies, "'", "'"),
 							"+");
 					}
 				
@@ -2522,7 +2540,7 @@ public:
 			}
 
 			cmTarget* target = findResult->second.target;
-			cmLocalFastbuildGenerator* lg = findResult->second.lg;
+			//cmLocalFastbuildGenerator* lg = findResult->second.lg;
 			const std::string & targetName = target->GetName();
 
 			// Define compile flags
@@ -2615,9 +2633,9 @@ void cmGlobalFastbuildGenerator::EnableLanguage(
 	std::vector<std::string>const &  lang,
 	cmMakefile *mf, bool optional)
 {
-  // Create list of configurations requested by user's cache, if any.
-  this->cmGlobalGenerator::EnableLanguage(lang, mf, optional);
-  Detail::Detection::DetectConfigurations(this, mf, this->Configurations);
+	// Create list of configurations requested by user's cache, if any.
+	this->cmGlobalGenerator::EnableLanguage(lang, mf, optional);
+	Detail::Detection::DetectConfigurations(this, mf, this->Configurations);
 }
 
 //----------------------------------------------------------------------------
@@ -2631,14 +2649,14 @@ void cmGlobalFastbuildGenerator::Generate()
 
 //----------------------------------------------------------------------------
 void cmGlobalFastbuildGenerator::GenerateBuildCommand(
-  std::vector<std::string>& makeCommand,
-  const std::string& makeProgram,
-  const std::string& projectName,
-  const std::string& projectDir,
-  const std::string& targetName,
-  const std::string& config,
-  bool fast, bool verbose,
-  std::vector<std::string> const& makeOptions)
+	std::vector<std::string>& makeCommand,
+	const std::string& makeProgram,
+	const std::string& /*projectName*/,
+	const std::string& /*projectDir*/,
+	const std::string& targetName,
+	const std::string& config,
+	bool /*fast*/, bool /*verbose*/,
+	std::vector<std::string> const& /*makeOptions*/)
 {
 	// A build command for fastbuild looks like this:
 	// fbuild.exe [make-options] [-config projectName.bff] <target>-<config>
@@ -2731,6 +2749,19 @@ void cmGlobalFastbuildGenerator::ComputeTargetObjectDirectory(
 const char* cmGlobalFastbuildGenerator::GetCMakeCFGIntDir() const
 {
 	return "$ConfigName$";
+}
+
+//----------------------------------------------------------------------------
+void cmGlobalFastbuildGenerator::GetTargetSets(TargetDependSet& projectTargets,
+					TargetDependSet& originalTargets,
+					cmLocalGenerator* root, GeneratorVector const& gv)
+{
+	cmGlobalGenerator::GetTargetSets(projectTargets, originalTargets, root, gv);
+}
+//----------------------------------------------------------------------------
+const std::vector<std::string> & cmGlobalFastbuildGenerator::GetConfigurations() const
+{
+	return Configurations;
 }
 
 //----------------------------------------------------------------------------
