@@ -379,7 +379,6 @@ public:
 
 	static void DetectOutput(
 		FastbuildTargetNames & targetNamesOut,
-		cmLocalFastbuildGenerator * /*lg*/,
 		cmTarget &target,
 		const std::string & configName)
 	{
@@ -609,8 +608,6 @@ public:
 			return false;
 		}
 
-		//cmTarget::TargetType targetType = target.GetType();
-
 		cmLocalGenerator::RuleVariables vars;
 		vars.RuleLauncher = "RULE_LAUNCH_LINK";
 		vars.CMTarget = &target;
@@ -702,7 +699,8 @@ public:
 		for (std::vector<std::string>::iterator i = compileCmds.begin();
 			i != compileCmds.end(); ++i)
 		{
-			lg->ExpandRuleVariables(*i, compileObjectVars);
+			std::string & compileCmdStr = *i;
+			lg->ExpandRuleVariables(compileCmdStr, compileObjectVars);
 		}
 
 		command = BuildCommandLine(compileCmds);
@@ -736,7 +734,8 @@ public:
 		for (std::vector<std::string>::iterator i = compileCmds.begin();
 			i != compileCmds.end(); ++i)
 		{
-			lg->ExpandRuleVariables(*i, vars);
+			std::string & compileCmdStr = *i;
+			lg->ExpandRuleVariables(compileCmdStr, vars);
 		}
 
 		std::string cmdLine =
@@ -884,8 +883,7 @@ public:
 	}
 
 	static void DetectTargetLinkDependencies(
-		cmGlobalFastbuildGenerator * /*gg*/,
-		cmTarget& target, 
+		cmTarget& target,
 		const std::string& configName,
 		std::vector<std::string>& dependencies)
 	{
@@ -1037,7 +1035,6 @@ public:
 			typedef std::vector<std::string> StringVector;
 			typedef std::vector<const TType*> OrderedEntrySet;
 			typedef std::map<std::string, const TType*> OutputMap;
-			//typedef std::map<const TType*, StringVector> DependencyMap;
 
 			// Build up a map of outputNames to entries
 			OutputMap outputMap;
@@ -1598,10 +1595,12 @@ public:
 		context.fc.WritePopScope();
 
 		// Iterate over all configurations and define them:
-		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-			iter != context.self->Configurations.end(); ++iter)
+		std::vector<std::string>::const_iterator
+				iter = context.self->GetConfigurations().begin(),
+				end = context.self->GetConfigurations().end();
+		for (; iter != end; ++iter)
 		{
-			std::string & configName = *iter;
+			const std::string & configName = *iter;
 			context.fc.WriteVariable("config_" + configName, "");
 			context.fc.WritePushScopeStruct();
 
@@ -1613,7 +1612,7 @@ public:
 
 		// Write out a list of all configs
 		context.fc.WriteArray("all_configs", 
-			Wrap(context.self->Configurations, ".config_", ""));
+			Wrap(context.self->GetConfigurations(), ".config_", ""));
 	}
 
 	static std::string MakeCustomLauncher(
@@ -1865,10 +1864,12 @@ public:
 		const std::string& targetName = target.GetName();
 
 		// Now output the commands
-		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-			iter != context.self->Configurations.end(); ++iter)
+		std::vector<std::string>::const_iterator
+				iter = context.self->GetConfigurations().begin(),
+				end = context.self->GetConfigurations().end();
+		for (; iter != end; ++iter)
 		{
-			std::string configName = *iter;
+			const std::string & configName = *iter;
 
 			context.fc.WriteVariable("buildStep_" + buildStep + "_" + configName, "");
 			context.fc.WritePushScopeStruct();
@@ -1915,7 +1916,6 @@ public:
 		const std::string& targetName = target.GetName();
 
 		// Iterating over all configurations
-		//const char* customCommandGroupNamePrefix = "ObjectGroup_cmCustomCommands_";
 		std::vector<std::string>::const_iterator
 			iter = context.self->GetConfigurations().begin(),
 			end = context.self->GetConfigurations().end();
@@ -2054,7 +2054,7 @@ public:
 				configEnd = context.self->GetConfigurations().end();
 		for (; configIter != configEnd; ++configIter)
 		{
-			std::string configName = *configIter;
+			const std::string & configName = *configIter;
 
 			context.fc.WriteVariable("BaseConfig_" + configName, "");
 			context.fc.WritePushScopeStruct();
@@ -2068,7 +2068,7 @@ public:
 			// Write out the output paths for the outcome of this target
 			{
 				Detection::FastbuildTargetNames targetNames;
-				Detection::DetectOutput(targetNames, lg, target, configName);
+				Detection::DetectOutput(targetNames, target, configName);
 
 				context.fc.WriteVariable("TargetNameOut", Quote(targetNames.targetNameOut));
 				context.fc.WriteVariable("TargetNameImport", Quote(targetNames.targetNameImport));
@@ -2148,7 +2148,7 @@ public:
 			configIter = context.self->GetConfigurations().begin();
 			for (; configIter != configEnd; ++configIter)
 			{
-				std::string configName = *configIter;
+				const std::string & configName = *configIter;
 				context.fc.WriteVariable("ObjectConfig_" + configName, "");
 				context.fc.WritePushScopeStruct();
 
@@ -2287,7 +2287,7 @@ public:
 				end = context.self->GetConfigurations().end();
 		for (; iter != end; ++iter)
 		{
-			std::string configName = *iter;
+			const std::string & configName = *iter;
 
 			std::string linkRuleName = targetName + "-link-" + configName;
 
@@ -2352,7 +2352,7 @@ public:
 					{
 						std::vector<std::string> extraDependencies;
 						Detection::DetectTargetObjectDependencies( context.self, target, configName, extraDependencies );
-						Detection::DetectTargetLinkDependencies(context.self, target, configName, extraDependencies);
+						Detection::DetectTargetLinkDependencies(target, configName, extraDependencies);
 
 						context.fc.WriteArray("Libraries", 
 							Wrap(extraDependencies, "'", "'"),
@@ -2431,10 +2431,12 @@ public:
 	{
 		const std::string& targetName = target.GetName();
 		
-		for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-			iter != context.self->Configurations.end(); ++iter)
+		std::vector<std::string>::const_iterator
+            iter = context.self->GetConfigurations().begin(),
+			end = context.self->GetConfigurations().end();
+		for (; iter != end; ++iter)
 		{
-			std::string configName = *iter;
+			const std::string & configName = *iter;
 
 			if (!linkableDeps.empty())
 			{
@@ -2540,14 +2542,15 @@ public:
 			}
 
 			cmTarget* target = findResult->second.target;
-			//cmLocalFastbuildGenerator* lg = findResult->second.lg;
 			const std::string & targetName = target->GetName();
 
 			// Define compile flags
-			for (std::vector<std::string>::iterator iter = context.self->Configurations.begin();
-				iter != context.self->Configurations.end(); ++iter)
+			std::vector<std::string>::const_iterator
+				iter = context.self->GetConfigurations().begin(),
+				end = context.self->GetConfigurations().end();
+			for (; iter != end; ++iter)
 			{
-				std::string & configName = *iter;
+				const std::string & configName = *iter;
 				std::string aliasName = targetName + "-" + configName;
 
 				perTarget[targetName].push_back(aliasName);
@@ -2591,7 +2594,7 @@ public:
 		context.fc.WriteCommand("Alias", "'All'");
 		context.fc.WritePushScope();
 		context.fc.WriteArray("Targets", 
-			Wrap(context.self->Configurations, "'", "'"));
+			Wrap(context.self->GetConfigurations(), "'", "'"));
 		context.fc.WritePopScope();
 	}
 };
