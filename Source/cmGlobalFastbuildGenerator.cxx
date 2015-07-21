@@ -37,6 +37,7 @@
    - Would be great if you could define dummy targets (maybe blank aliases?)
    - Exec nodes need to not worry about dummy output files not being created
    - Would be nice if nodes didn't need to be completely in order. But then cycles would be possible
+   - Implib directory is not created for exeNodes (DLLs work now though)
 
   Limitations:
    - Only tested/working with MSVC
@@ -261,6 +262,12 @@ private:
 class cmGlobalFastbuildGenerator::Detail::Detection
 {
 public:
+	static void UnescapeFastbuildVariables(std::string& string)
+	{
+		// Unescape the Fastbuild configName symbol with $
+		cmSystemTools::ReplaceString(string, "$$ConfigName$$", "$ConfigName$");
+	}
+
 	static std::string BuildCommandLine(
 		const std::vector<std::string> &cmdLines)
 	{
@@ -310,9 +317,7 @@ public:
 		}
 #endif
 		std::string cmdOut = cmd.str();
-
-		// Unescape the Fastbuild configName symbol with $
-		cmSystemTools::ReplaceString(cmdOut, "$$ConfigName$$", "$ConfigName$");
+		UnescapeFastbuildVariables(cmdOut);
 
 		return cmdOut;
 	}
@@ -614,11 +619,11 @@ public:
 		vars.Language = linkLanguage.c_str();
 
 		std::string responseFlag;
-		vars.Objects = "%1";
+		vars.Objects = "$FB_INPUT_1_PLACEHOLDER$";
 		vars.LinkLibraries = "";
 		
 		vars.ObjectDir = "$TargetOutDir$";
-		vars.Target = "%2";
+		vars.Target = "$FB_INPUT_2_PLACEHOLDER$";
 
 		vars.TargetSOName = "$TargetOutSO$";
 		vars.TargetPDB = "$TargetOutDir$$TargetNamePDB$";
@@ -641,7 +646,7 @@ public:
 		vars.TargetVersionMinor = targetVersionMinor.c_str();
 
 		vars.Defines = "$CompileDefineFlags$";
-		vars.Flags = "$CompileFlags$";
+		vars.Flags = "$TargetFlags$";
 		vars.LinkFlags = "$LinkFlags$ $LinkPath$";
 		// Rule for linking library/executable.
 		std::vector<std::string> linkCmds;
@@ -680,8 +685,8 @@ public:
 		cmLocalGenerator::RuleVariables compileObjectVars;
 		compileObjectVars.CMTarget = &target;
 		compileObjectVars.Language = language.c_str();
-		compileObjectVars.Source = "%1";
-		compileObjectVars.Object = "%2";
+		compileObjectVars.Source = "$FB_INPUT_1_PLACEHOLDER$";
+		compileObjectVars.Object = "$FB_INPUT_2_PLACEHOLDER$";
 		compileObjectVars.ObjectDir = "$TargetOutputDir$";
 		compileObjectVars.ObjectFileDir = "";
 		compileObjectVars.Flags = "";
@@ -1245,6 +1250,54 @@ public:
 		return false;
 	}
 
+	static void DetectCompilerExtraFiles(const std::string& compilerID,
+		const std::string& version, std::vector<std::string>& extraFiles)
+	{
+		// Output a list of files that are relative to $CompilerRoot$.
+		if (compilerID == "MSVC")
+		{
+			if (version.compare(0, 3, "18.") != std::string::npos)
+			{
+				// Using vs2013
+				const char *vs2013_extraFiles[13] = {
+					"$CompilerRoot$\\c1.dll",
+					"$CompilerRoot$\\c1ast.dll",
+					"$CompilerRoot$\\c1xx.dll",
+					"$CompilerRoot$\\c1xxast.dll",
+					"$CompilerRoot$\\c2.dll",
+					"$CompilerRoot$\\msobj120.dll",
+					"$CompilerRoot$\\mspdb120.dll",
+					"$CompilerRoot$\\mspdbcore.dll",
+					"$CompilerRoot$\\mspft120.dll",
+					"$CompilerRoot$\\1033\\clui.dll",
+					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC120.CRT\\msvcp120.dll",
+					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC120.CRT\\msvcr120.dll",
+					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC120.CRT\\vccorlib120.dll"
+				};
+				extraFiles.insert(extraFiles.end(), &vs2013_extraFiles[0], &vs2013_extraFiles[13]);
+			}
+			else if (version.compare(0, 3, "17.") != std::string::npos)
+			{
+				// Using vs2012
+				const char *vs2012_extraFiles[12] = {
+					"$CompilerRoot$\\c1.dll",
+					"$CompilerRoot$\\c1ast.dll",
+					"$CompilerRoot$\\c1xx.dll",
+					"$CompilerRoot$\\c1xxast.dll",
+					"$CompilerRoot$\\c2.dll",
+					"$CompilerRoot$\\mspft110.dll",
+					"$CompilerRoot$\\1033\\clui.dll",
+					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC110.CRT\\msvcp110.dll",
+					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC110.CRT\\msvcr110.dll",
+					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC110.CRT\\vccorlib110.dll",
+					"$CompilerRoot$\\..\\..\\Common7\\IDE\\mspdb110.dll",
+					"$CompilerRoot$\\..\\..\\Common7\\IDE\\mspdbcore.dll"
+				};
+				extraFiles.insert(extraFiles.end(), &vs2012_extraFiles[0], &vs2012_extraFiles[12]);
+			}
+		}
+	}
+
 private:
 
 };
@@ -1461,6 +1514,7 @@ public:
 	{
 		context.fc.WriteSectionHeader("Fastbuild makefile - Generated using CMAKE");
 
+		WritePlaceholders( context );
 		WriteSettings( context );
 		WriteCompilers( context );
 		WriteConfigurations( context );
@@ -1469,6 +1523,15 @@ public:
 
 		WriteTargetDefinitions( context );
 		WriteAliases( context );
+	}
+
+	static void WritePlaceholders(GenerationContext& context)
+	{
+		// Define some placeholder 
+		context.fc.WriteSectionHeader("Helper variables");
+
+		context.fc.WriteVariable( "FB_INPUT_1_PLACEHOLDER", Quote("\"%1\"") );
+		context.fc.WriteVariable( "FB_INPUT_2_PLACEHOLDER", Quote("\"%2\"") );
 	}
 
 	static void WriteSettings( GenerationContext& context )
@@ -1486,6 +1549,14 @@ public:
 		context.fc.WriteVariable("CachePath", Quote(cacheDir));
 		context.fc.WritePopScope();
 	}
+
+	struct CompilerDef
+	{
+		std::string name;
+		std::string path;
+		std::string cmakeCompilerID;
+		std::string cmakeCompilerVersion;
+	};
 
 	static bool WriteCompilers( GenerationContext& context )
 	{
@@ -1511,7 +1582,8 @@ public:
 
 		// Now output a compiler for each of these languages
 		typedef std::map<std::string, std::string> StringMap;
-		StringMap compilerToCompilerName;
+		typedef std::map<std::string, CompilerDef> CompilerDefMap;
+		CompilerDefMap compilerToDef;
 		StringMap languageToCompiler;
 		for (std::set<std::string>::iterator iter = languages.begin();
 			iter != languages.end();
@@ -1528,40 +1600,52 @@ public:
 			}
 
 			// Add the language to the compiler's name
-			std::string& compilerName = compilerToCompilerName[compilerLocation];
-			if (compilerName.empty())
+			CompilerDef& compilerDef = compilerToDef[compilerLocation];
+			if (compilerDef.name.empty())
 			{
-				compilerName = "Compiler";
+				compilerDef.name = "Compiler";
+				compilerDef.path = compilerLocation;
+				compilerDef.cmakeCompilerID = 
+					mf->GetSafeDefinition("CMAKE_" + language + "_COMPILER_ID");
+				compilerDef.cmakeCompilerVersion =
+					mf->GetSafeDefinition("CMAKE_" + language + "_COMPILER_VERSION");
 			}
-			compilerName += "-";
-			compilerName += language;
+			compilerDef.name += "-";
+			compilerDef.name += language;
 
 			// Now add the language to point to that compiler location
 			languageToCompiler[language] = compilerLocation;
 		}
 
 		// Now output all the compilers
-		for (StringMap::iterator iter = compilerToCompilerName.begin();
-			iter != compilerToCompilerName.end();
+		for (CompilerDefMap::iterator iter = compilerToDef.begin();
+			iter != compilerToDef.end();
 			++iter)
 		{
-			const std::string& compilerLocation = iter->first;
-			const std::string& compilerName = iter->second;
+			const CompilerDef& compilerDef = iter->second;
+
+			// Detect the list of extra files used by this compiler
+			// for distribution
+			std::vector<std::string> extraFiles;
+			Detection::DetectCompilerExtraFiles(compilerDef.cmakeCompilerID,
+				compilerDef.cmakeCompilerVersion, extraFiles);
 
 			// Strip out the path to the compiler
 			std::string compilerPath = 
-				cmSystemTools::GetFilenamePath( compilerLocation );
+				cmSystemTools::GetFilenamePath(compilerDef.path);
 			std::string compilerFile = "$CompilerRoot$\\" +
-				cmSystemTools::GetFilenameName( compilerLocation );
+				cmSystemTools::GetFilenameName(compilerDef.path);
 
-			cmSystemTools::ConvertToOutputSlashes( compilerPath );
-			cmSystemTools::ConvertToOutputSlashes( compilerFile );
+			cmSystemTools::ConvertToOutputSlashes(compilerPath);
+			cmSystemTools::ConvertToOutputSlashes(compilerFile);
 
 			// Write out the compiler that has been configured
-			context.fc.WriteCommand("Compiler", Quote(compilerName));
+			context.fc.WriteCommand("Compiler", Quote(compilerDef.name));
 			context.fc.WritePushScope();
 			context.fc.WriteVariable("CompilerRoot", Quote(compilerPath));
 			context.fc.WriteVariable("Executable", Quote(compilerFile));
+			context.fc.WriteArray("ExtraFiles", Wrap(extraFiles));
+
 			context.fc.WritePopScope();
 		}
 
@@ -1572,15 +1656,15 @@ public:
 		{
 			const std::string& language = iter->first;
 			const std::string& compilerLocation = iter->second;
-			const std::string& compilerName = compilerToCompilerName[compilerLocation];
+			const CompilerDef& compilerDef = compilerToDef[compilerLocation];
 
 			// Output a default compiler to absorb the library requirements for a compiler
 			if (iter == languageToCompiler.begin())
 			{
-				context.fc.WriteVariable("Compiler_dummy", Quote(compilerName));
+				context.fc.WriteVariable("Compiler_dummy", Quote(compilerDef.name));
 			}
 
-			context.fc.WriteVariable("Compiler_"+language, Quote(compilerName));
+			context.fc.WriteVariable("Compiler_" + language, Quote(compilerDef.name));
 		}
 		
 		return true;
@@ -1799,6 +1883,8 @@ public:
 		}
 
 		std::string cmd = Detection::BuildCommandLine(cmdLines);
+		Detection::UnescapeFastbuildVariables(cmd);
+
 		std::string executable;
 		std::string args;
 		Detection::SplitExecutableAndFlags(cmd, executable, args);
@@ -2164,7 +2250,6 @@ public:
 					context.fc.WriteVariable("CompilerOutputPath", Quote(targetCompileOutDirectory));
 
 					std::string compileObjectCmd = Detection::DetectCompileRule(lg, target, objectGroupLanguage);
-					//context.fc.WriteVariable("CompilerRuleCmd", Quote( compileObjectCmd ));
 				}
 
 				// Compiler options
@@ -2174,6 +2259,7 @@ public:
 					std::string compileCmd;
 					Detection::DetectBaseCompileCommand(compileCmd,
 						lg, target, objectGroupLanguage);
+					Detection::UnescapeFastbuildVariables(compileCmd);
 
 					std::string executable;
 					Detection::SplitExecutableAndFlags(compileCmd, executable, baseCompileFlags);
@@ -2216,6 +2302,9 @@ public:
 						std::string compileDefines = 
 							Detection::ComputeDefines(lg, target, srcFile, configName, objectGroupLanguage);
 						
+						Detection::UnescapeFastbuildVariables(compilerFlags);
+						Detection::UnescapeFastbuildVariables(compileDefines);
+
 						std::string configKey = compilerFlags + "{|}" + compileDefines;
 						CompileCommand& command = commandPermutations[configKey];
 						command.sourceFiles.push_back(sourceFile);
@@ -2321,11 +2410,18 @@ public:
 					std::string linkPath;
 					Detection::DetectLinkerLibPaths(linkPath, lg, target, configName);
 
+					Detection::UnescapeFastbuildVariables(linkLibs);
+					Detection::UnescapeFastbuildVariables(targetFlags);
+					Detection::UnescapeFastbuildVariables(linkFlags);
+					Detection::UnescapeFastbuildVariables(frameworkPath);
+					Detection::UnescapeFastbuildVariables(linkPath);
+
 					linkPath = frameworkPath + linkPath;
 
 					context.fc.WriteVariable("LinkPath", "'" + linkPath + "'");
 					context.fc.WriteVariable("LinkLibs", "'" + linkLibs + "'");
 					context.fc.WriteVariable("LinkFlags", "'" + linkFlags + "'");
+					context.fc.WriteVariable("TargetFlags", "'" + targetFlags + "'");
 
 					// Remove the command from the front and leave the flags behind
 					std::string linkCmd;
@@ -2334,12 +2430,17 @@ public:
 					{
 						return;
 					}
+					Detection::UnescapeFastbuildVariables(linkCmd);
 
 					std::string executable;
 					std::string flags;
 					Detection::SplitExecutableAndFlags(linkCmd, executable, flags);
 
+					std::string language = target.GetLinkerLanguage(configName);
+					std::string linkerType = lg->GetMakefile()->GetSafeDefinition("CMAKE_" + language + "_COMPILER_ID");
+
 					context.fc.WriteVariable("Linker", Quote(executable));
+					context.fc.WriteVariable("LinkerType", Quote(linkerType));
 					context.fc.WriteVariable("BaseLinkerOptions", Quote(flags));
 
 					context.fc.WriteVariable("LinkerOutput", "'$TargetOutput$'");
@@ -2368,7 +2469,7 @@ public:
 						// Push dummy definitions for compilation variables
 						// These variables are required by the Library command
 						context.fc.WriteVariable("Compiler", ".Compiler_dummy");
-						context.fc.WriteVariable("CompilerOptions", "'-c %1 %2'");
+						context.fc.WriteVariable("CompilerOptions", "'-c $FB_INPUT_1_PLACEHOLDER$ $FB_INPUT_2_PLACEHOLDER$'");
 						context.fc.WriteVariable("CompilerOutputPath", "'/dummy/'");
 					
 						// These variables are required by the Library command as well
