@@ -645,7 +645,7 @@ public:
 		vars.TargetVersionMinor = targetVersionMinor.c_str();
 
 		vars.Defines = "$CompileDefineFlags$";
-		vars.Flags = "$CompileFlags$";
+		vars.Flags = "$TargetFlags$";
 		vars.LinkFlags = "$LinkFlags$ $LinkPath$";
 		// Rule for linking library/executable.
 		std::vector<std::string> linkCmds;
@@ -2341,6 +2341,7 @@ public:
 					context.fc.WriteVariable("LinkPath", "'" + linkPath + "'");
 					context.fc.WriteVariable("LinkLibs", "'" + linkLibs + "'");
 					context.fc.WriteVariable("LinkFlags", "'" + linkFlags + "'");
+					context.fc.WriteVariable("TargetFlags", "'" + targetFlags + "'");
 
 					// Remove the command from the front and leave the flags behind
 					std::string linkCmd;
