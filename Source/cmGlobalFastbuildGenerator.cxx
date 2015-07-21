@@ -261,6 +261,12 @@ private:
 class cmGlobalFastbuildGenerator::Detail::Detection
 {
 public:
+	static void UnescapeFastbuildVariables(std::string& string)
+	{
+		// Unescape the Fastbuild configName symbol with $
+		cmSystemTools::ReplaceString(string, "$$ConfigName$$", "$ConfigName$");
+	}
+
 	static std::string BuildCommandLine(
 		const std::vector<std::string> &cmdLines)
 	{
@@ -310,9 +316,7 @@ public:
 		}
 #endif
 		std::string cmdOut = cmd.str();
-
-		// Unescape the Fastbuild configName symbol with $
-		cmSystemTools::ReplaceString(cmdOut, "$$ConfigName$$", "$ConfigName$");
+		UnescapeFastbuildVariables(cmdOut);
 
 		return cmdOut;
 	}
@@ -1799,6 +1803,8 @@ public:
 		}
 
 		std::string cmd = Detection::BuildCommandLine(cmdLines);
+		Detection::UnescapeFastbuildVariables(cmd);
+
 		std::string executable;
 		std::string args;
 		Detection::SplitExecutableAndFlags(cmd, executable, args);
@@ -2164,7 +2170,6 @@ public:
 					context.fc.WriteVariable("CompilerOutputPath", Quote(targetCompileOutDirectory));
 
 					std::string compileObjectCmd = Detection::DetectCompileRule(lg, target, objectGroupLanguage);
-					//context.fc.WriteVariable("CompilerRuleCmd", Quote( compileObjectCmd ));
 				}
 
 				// Compiler options
@@ -2174,6 +2179,7 @@ public:
 					std::string compileCmd;
 					Detection::DetectBaseCompileCommand(compileCmd,
 						lg, target, objectGroupLanguage);
+					Detection::UnescapeFastbuildVariables(compileCmd);
 
 					std::string executable;
 					Detection::SplitExecutableAndFlags(compileCmd, executable, baseCompileFlags);
@@ -2216,6 +2222,9 @@ public:
 						std::string compileDefines = 
 							Detection::ComputeDefines(lg, target, srcFile, configName, objectGroupLanguage);
 						
+						Detection::UnescapeFastbuildVariables(compilerFlags);
+						Detection::UnescapeFastbuildVariables(compileDefines);
+
 						std::string configKey = compilerFlags + "{|}" + compileDefines;
 						CompileCommand& command = commandPermutations[configKey];
 						command.sourceFiles.push_back(sourceFile);
@@ -2321,6 +2330,12 @@ public:
 					std::string linkPath;
 					Detection::DetectLinkerLibPaths(linkPath, lg, target, configName);
 
+					Detection::UnescapeFastbuildVariables(linkLibs);
+					Detection::UnescapeFastbuildVariables(targetFlags);
+					Detection::UnescapeFastbuildVariables(linkFlags);
+					Detection::UnescapeFastbuildVariables(frameworkPath);
+					Detection::UnescapeFastbuildVariables(linkPath);
+
 					linkPath = frameworkPath + linkPath;
 
 					context.fc.WriteVariable("LinkPath", "'" + linkPath + "'");
@@ -2334,6 +2349,7 @@ public:
 					{
 						return;
 					}
+					Detection::UnescapeFastbuildVariables(linkCmd);
 
 					std::string executable;
 					std::string flags;
