@@ -37,6 +37,7 @@
    - Would be great if you could define dummy targets (maybe blank aliases?)
    - Exec nodes need to not worry about dummy output files not being created
    - Would be nice if nodes didn't need to be completely in order. But then cycles would be possible
+   - Implib directory is not created for exeNodes (DLLs work now though)
 
   Limitations:
    - Only tested/working with MSVC
@@ -618,11 +619,11 @@ public:
 		vars.Language = linkLanguage.c_str();
 
 		std::string responseFlag;
-		vars.Objects = "%1";
+		vars.Objects = "\"%1\"";
 		vars.LinkLibraries = "";
 		
 		vars.ObjectDir = "$TargetOutDir$";
-		vars.Target = "%2";
+		vars.Target = "\"%2\"";
 
 		vars.TargetSOName = "$TargetOutSO$";
 		vars.TargetPDB = "$TargetOutDir$$TargetNamePDB$";
@@ -684,8 +685,8 @@ public:
 		cmLocalGenerator::RuleVariables compileObjectVars;
 		compileObjectVars.CMTarget = &target;
 		compileObjectVars.Language = language.c_str();
-		compileObjectVars.Source = "%1";
-		compileObjectVars.Object = "%2";
+		compileObjectVars.Source = "\"%1\"";
+		compileObjectVars.Object = "\"%2\"";
 		compileObjectVars.ObjectDir = "$TargetOutputDir$";
 		compileObjectVars.ObjectFileDir = "";
 		compileObjectVars.Flags = "";
@@ -2431,7 +2432,7 @@ public:
 						// Push dummy definitions for compilation variables
 						// These variables are required by the Library command
 						context.fc.WriteVariable("Compiler", ".Compiler_dummy");
-						context.fc.WriteVariable("CompilerOptions", "'-c %1 %2'");
+						context.fc.WriteVariable("CompilerOptions", "'-c \"%1\" \"%2\"'");
 						context.fc.WriteVariable("CompilerOutputPath", "'/dummy/'");
 					
 						// These variables are required by the Library command as well
