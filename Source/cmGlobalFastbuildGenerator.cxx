@@ -619,11 +619,11 @@ public:
 		vars.Language = linkLanguage.c_str();
 
 		std::string responseFlag;
-		vars.Objects = "\"%1\"";
+		vars.Objects = "$FB_INPUT_1_PLACEHOLDER$";
 		vars.LinkLibraries = "";
 		
 		vars.ObjectDir = "$TargetOutDir$";
-		vars.Target = "\"%2\"";
+		vars.Target = "$FB_INPUT_2_PLACEHOLDER$";
 
 		vars.TargetSOName = "$TargetOutSO$";
 		vars.TargetPDB = "$TargetOutDir$$TargetNamePDB$";
@@ -685,8 +685,8 @@ public:
 		cmLocalGenerator::RuleVariables compileObjectVars;
 		compileObjectVars.CMTarget = &target;
 		compileObjectVars.Language = language.c_str();
-		compileObjectVars.Source = "\"%1\"";
-		compileObjectVars.Object = "\"%2\"";
+		compileObjectVars.Source = "$FB_INPUT_1_PLACEHOLDER$";
+		compileObjectVars.Object = "$FB_INPUT_2_PLACEHOLDER$";
 		compileObjectVars.ObjectDir = "$TargetOutputDir$";
 		compileObjectVars.ObjectFileDir = "";
 		compileObjectVars.Flags = "";
@@ -1491,6 +1491,7 @@ public:
 	{
 		context.fc.WriteSectionHeader("Fastbuild makefile - Generated using CMAKE");
 
+		WritePlaceholders( context );
 		WriteSettings( context );
 		WriteCompilers( context );
 		WriteConfigurations( context );
@@ -1499,6 +1500,15 @@ public:
 
 		WriteTargetDefinitions( context );
 		WriteAliases( context );
+	}
+
+	static void WritePlaceholders(GenerationContext& context)
+	{
+		// Define some placeholder 
+		context.fc.WriteSectionHeader("Helper variables");
+
+		context.fc.WriteVariable( "FB_INPUT_1_PLACEHOLDER", Quote("\"%1\"") );
+		context.fc.WriteVariable( "FB_INPUT_2_PLACEHOLDER", Quote("\"%2\"") );
 	}
 
 	static void WriteSettings( GenerationContext& context )
@@ -2432,7 +2442,7 @@ public:
 						// Push dummy definitions for compilation variables
 						// These variables are required by the Library command
 						context.fc.WriteVariable("Compiler", ".Compiler_dummy");
-						context.fc.WriteVariable("CompilerOptions", "'-c \"%1\" \"%2\"'");
+						context.fc.WriteVariable("CompilerOptions", "'-c $FB_INPUT_1_PLACEHOLDER$ $FB_INPUT_2_PLACEHOLDER$'");
 						context.fc.WriteVariable("CompilerOutputPath", "'/dummy/'");
 					
 						// These variables are required by the Library command as well
