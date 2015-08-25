@@ -90,6 +90,6 @@ if (NOT incs STREQUAL ";/one/two")
   message(SEND_ERROR "Empty include_directories entry was not ignored.")
 endif()
 
-if(NOT CMAKE_GENERATOR STREQUAL Xcode AND NOT CMAKE_GENERATOR STREQUAL Ninja)
+if(NOT CMAKE_GENERATOR STREQUAL Xcode AND NOT CMAKE_GENERATOR STREQUAL Ninja AND NOT CMAKE_GENERATOR STREQUAL Fastbuild)
   add_subdirectory(CMP0021)
 endif()
