@@ -1366,7 +1366,9 @@ public:
 
 	static std::string Quote(const std::string& str, const std::string& quotation = "'")
 	{
-		return quotation + str + quotation;
+		std::string result = str;
+		cmSystemTools::ReplaceString(result, quotation, "^" + quotation);
+		return quotation + result + quotation;
 	}
 
 	static std::string Join(const std::vector<std::string>& elems, 
@@ -2129,10 +2131,6 @@ public:
 		std::vector<std::string> dependencies;
 		Detection::DetectTargetCompileDependencies(context.self, target, dependencies);
 
-		// Output the prebuild/Prelink commands
-		WriteCustomBuildSteps(context, lg, target, target.GetPreBuildCommands(), "PreBuild", dependencies);
-		WriteCustomBuildSteps(context, lg, target, target.GetPreLinkCommands(), "PreLink", dependencies);
-
 		// Iterate over each configuration
 		// This time to define linker settings for each config
 		std::vector<std::string>::const_iterator
@@ -2185,6 +2183,26 @@ public:
 					Wrap(dependencies, "'", "-" + configName + "'"));
 			}
 
+			context.fc.WritePopScope();
+		}
+
+		// Output the prebuild/Prelink commands
+		WriteCustomBuildSteps(context, lg, target, target.GetPreBuildCommands(), "PreBuild", dependencies);
+		WriteCustomBuildSteps(context, lg, target, target.GetPreLinkCommands(), "PreLink", dependencies);
+
+		// Iterate over each configuration
+		// This time to define prebuild and post build targets for each config
+		configIter = context.self->GetConfigurations().begin();
+		configEnd = context.self->GetConfigurations().end();
+		for (; configIter != configEnd; ++configIter)
+		{
+			const std::string & configName = *configIter;
+
+			context.fc.WriteVariable("BaseCompilationConfig_" + configName, "");
+			context.fc.WritePushScopeStruct();
+
+			context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
+
 			// Add to the list of prebuild deps
 			// The prelink and prebuild commands
 			{
@@ -2205,7 +2223,7 @@ public:
 						"+");
 				}
 			}
-			
+
 			context.fc.WritePopScope();
 		}
 
@@ -2238,7 +2256,7 @@ public:
 				context.fc.WriteVariable("ObjectConfig_" + configName, "");
 				context.fc.WritePushScopeStruct();
 
-				context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
+				context.fc.WriteCommand("Using", ".BaseCompilationConfig_" + configName);
 				context.fc.WriteCommand("Using", ".CustomCommands_" + configName);
 
 				context.fc.WriteBlankLine();
