@@ -2436,7 +2436,11 @@ public:
 					std::string flags;
 					Detection::SplitExecutableAndFlags(linkCmd, executable, flags);
 
+					std::string language = target.GetLinkerLanguage(configName);
+					std::string linkerType = lg->GetMakefile()->GetSafeDefinition("CMAKE_" + language + "_COMPILER_ID");
+
 					context.fc.WriteVariable("Linker", Quote(executable));
+					context.fc.WriteVariable("LinkerType", Quote(linkerType));
 					context.fc.WriteVariable("BaseLinkerOptions", Quote(flags));
 
 					context.fc.WriteVariable("LinkerOutput", "'$TargetOutput$'");
