@@ -1271,9 +1271,9 @@ public:
 					"$CompilerRoot$\\mspdbcore.dll",
 					"$CompilerRoot$\\mspft120.dll",
 					"$CompilerRoot$\\1033\\clui.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC120.CRT\\msvcp120.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC120.CRT\\msvcr120.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC120.CRT\\vccorlib120.dll"
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC120.CRT\\msvcp120.dll",
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC120.CRT\\msvcr120.dll",
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC120.CRT\\vccorlib120.dll"
 				};
 				extraFiles.insert(extraFiles.end(), &vs2013_extraFiles[0], &vs2013_extraFiles[13]);
 			}
@@ -1288,11 +1288,11 @@ public:
 					"$CompilerRoot$\\c2.dll",
 					"$CompilerRoot$\\mspft110.dll",
 					"$CompilerRoot$\\1033\\clui.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC110.CRT\\msvcp110.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC110.CRT\\msvcr110.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC110.CRT\\vccorlib110.dll",
-					"$CompilerRoot$\\..\\..\\Common7\\IDE\\mspdb110.dll",
-					"$CompilerRoot$\\..\\..\\Common7\\IDE\\mspdbcore.dll"
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC110.CRT\\msvcp110.dll",
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC110.CRT\\msvcr110.dll",
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC110.CRT\\vccorlib110.dll",
+					"$CompilerRoot$\\..\\..\\..\\Common7\\IDE\\mspdb110.dll",
+					"$CompilerRoot$\\..\\..\\..\\Common7\\IDE\\mspdbcore.dll"
 				};
 				extraFiles.insert(extraFiles.end(), &vs2012_extraFiles[0], &vs2012_extraFiles[12]);
 			}
