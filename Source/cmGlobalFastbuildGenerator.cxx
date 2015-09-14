@@ -266,6 +266,7 @@ public:
 	{
 		// Unescape the Fastbuild configName symbol with $
 		cmSystemTools::ReplaceString(string, "$$ConfigName$$", "$ConfigName$");
+		cmSystemTools::ReplaceString(string, "^$ConfigName^$", "$ConfigName$");
 	}
 
 	static std::string BuildCommandLine(
