@@ -2369,12 +2369,14 @@ public:
 
 				}
 
-				// Write an alias for this object group to group them all together
-				context.fc.WriteCommand("Alias", Quote(objectGroupRuleName));
-				context.fc.WritePushScope();
-				context.fc.WriteArray("Targets", 
-					Wrap(configObjectGroups, "'", "'"));
-				context.fc.WritePopScope();
+				if(!configObjectGroups.empty()) {
+					// Write an alias for this object group to group them all together
+					context.fc.WriteCommand("Alias", Quote(objectGroupRuleName));
+					context.fc.WritePushScope();
+					context.fc.WriteArray("Targets",
+						Wrap(configObjectGroups, "'", "'"));
+					context.fc.WritePopScope();
+				}
 
 				context.fc.WritePopScope();
 			}
