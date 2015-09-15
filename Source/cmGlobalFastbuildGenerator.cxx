@@ -269,6 +269,12 @@ public:
 		cmSystemTools::ReplaceString(string, "^$ConfigName^$", "$ConfigName$");
 	}
 
+	static void ResolveFastbuildVariables(std::string& string, const std::string& configName)
+	{
+		// Replace Fastbuild configName with the config name
+		cmSystemTools::ReplaceString(string, "$ConfigName$", configName);
+	}
+
 	static std::string BuildCommandLine(
 		const std::vector<std::string> &cmdLines)
 	{
@@ -1702,56 +1708,6 @@ public:
 			Wrap(context.self->GetConfigurations(), ".config_", ""));
 	}
 
-	static std::string MakeCustomLauncher(
-		cmLocalFastbuildGenerator *lg,
-		cmCustomCommandGenerator const& ccg)
-	{
-		const char* property = "RULE_LAUNCH_CUSTOM";
-		const char* property_value = lg->GetMakefile()->GetProperty(property);
-
-		if (!property_value || !*property_value)
-		{
-			return std::string();
-		}
-
-		// Expand rules in the empty string.  It may insert the launcher and
-		// perform replacements.
-		cmLocalGenerator::RuleVariables vars;
-		vars.RuleLauncher = property;
-		std::string output;
-		const std::vector<std::string>& outputs = ccg.GetOutputs();
-		if (!outputs.empty())
-		{
-			cmLocalGenerator::RelativeRoot relative_root =
-				ccg.GetWorkingDirectory().empty() ? cmLocalGenerator::START_OUTPUT : cmLocalGenerator::NONE;
-
-			output = lg->Convert(outputs[0], relative_root, cmLocalGenerator::SHELL);
-		}
-		vars.Output = output.c_str();
-
-		std::string launcher;
-		lg->ExpandRuleVariables(launcher, vars);
-		if (!launcher.empty())
-		{
-			launcher += " ";
-		}
-
-		return launcher;
-	}
-
-	struct SourceFileNameIs
-	{
-		SourceFileNameIs(const std::string& name)
-		: m_name(name) {}
-
-		std::string m_name;
-
-		bool operator()(const cmSourceFile* sf) const
-		{
-			return sf->GetFullPath() == m_name;
-		}
-	};
-
 	static void WriteCustomCommand(
 		GenerationContext& context,
 		const cmCustomCommand* cc,
@@ -1775,27 +1731,15 @@ public:
 		// In which case, FASTBuild won't want them treated as 
 		// outputs.
 		{
-			cmGeneratorTarget *gt = context.self->GetGeneratorTarget(&target);
-			std::vector<cmSourceFile*> sourceFiles;
-			gt->GetSourceFiles(sourceFiles, configName);
-
 			// Loop through all outputs, and attempt to find it in the 
 			// source files.
 			for (size_t index = 0; index < mergedOutputs.size(); ++index)
 			{
 				const std::string& outputName = mergedOutputs[index];
 
-				std::vector<cmSourceFile*>::iterator findResult = std::find_if(
-					sourceFiles.begin(), sourceFiles.end(), SourceFileNameIs(outputName));
-
-				if (findResult == sourceFiles.end())
-				{
-					continue;
-				}
-				cmSourceFile* outputSourceFile = *findResult;
-
+				cmSourceFile* outputSourceFile = makefile->GetSource(outputName);
 				// Check if this file is symbolic
-				if (outputSourceFile->GetPropertyAsBool("SYMBOLIC"))
+				if (outputSourceFile && outputSourceFile->GetPropertyAsBool("SYMBOLIC"))
 				{
 					// We need to remove this file from the list of outputs
 					// Swap with back and pop
@@ -1855,42 +1799,31 @@ public:
 			}
 		}
 
-		std::vector<std::string> cmdLines;
-		if (ccg.GetNumberOfCommands() > 0) 
-		{
-			std::string wd = ccg.GetWorkingDirectory();
-			if (wd.empty())
-			{
-				wd = makefile->GetStartOutputDirectory();
-			}
-		
-			std::ostringstream cdCmd;
 #ifdef _WIN32
-			std::string cdStr = "cd /D ";
+		const std::string shellExt = ".bat";
 #else
-			std::string cdStr = "cd ";
+		const std::string shellExt = ".sh";
 #endif
-			cdCmd << cdStr << lg->ConvertToOutputFormat(wd, cmLocalGenerator::SHELL);
-			cmdLines.push_back(cdCmd.str());
-		}
 
-		std::string launcher = MakeCustomLauncher(lg, ccg);
+		std::string scriptFileName(ccg.GetWorkingDirectory() + targetName + ".bat");
+		cmsys::ofstream scriptFile(scriptFileName.c_str());
 
 		for (unsigned i = 0; i != ccg.GetNumberOfCommands(); ++i) 
 		{
-			cmdLines.push_back(launcher +
-				lg->ConvertToOutputFormat(ccg.GetCommand(i), cmLocalGenerator::SHELL));
+			std::string args;
+			ccg.AppendArguments(i, args);
+			cmSystemTools::ReplaceString(args, "$$", "$");
+#ifdef _WIN32
+			//in windows batch, '%' is a special character that needs to be doubled to be escaped
+			cmSystemTools::ReplaceString(args, "%", "%%");
+#endif
+			Detection::ResolveFastbuildVariables(args, configName);
 
-			std::string& cmd = cmdLines.back();
-			ccg.AppendArguments(i, cmd);
+			std::string command(ccg.GetCommand(i));
+			Detection::ResolveFastbuildVariables(command, configName);
+
+			scriptFile << command << args << std::endl;
 		}
-
-		std::string cmd = Detection::BuildCommandLine(cmdLines);
-		Detection::UnescapeFastbuildVariables(cmd);
-
-		std::string executable;
-		std::string args;
-		Detection::SplitExecutableAndFlags(cmd, executable, args);
 
 		// Write out an exec command
 		/*
@@ -1907,22 +1840,24 @@ public:
 			; but useful when Exec relies on externally generated files).
 		}
 		*/
-		
+
 		context.fc.WriteCommand("Exec", Quote(targetName));
 		context.fc.WritePushScope();
 		{
-			context.fc.WriteVariable("ExecExecutable", Quote(executable));
-			context.fc.WriteVariable("ExecArguments", Quote(args));
+#ifdef _WIN32
+			context.fc.WriteVariable("ExecExecutable", Quote(cmSystemTools::FindProgram("cmd.exe")));
+			context.fc.WriteVariable("ExecArguments", Quote("/C " + scriptFileName));
+#else
+			context.fc.WriteVariable("ExecExecutable", Quote(scriptFileName));
+#endif
+			if(!ccg.GetWorkingDirectory().empty())
+				context.fc.WriteVariable("ExecWorkingDir", Quote(ccg.GetWorkingDirectory()));
 
 			if (inputs.empty())
 			{
 				inputs.push_back("dummy-in");
 			}
 			context.fc.WriteArray("ExecInput", Wrap(inputs));
-			
-			// Currently fastbuild doesn't support more than 1
-			// output for a custom command (soon to change hopefully).
-			assert(mergedOutputs.size() <= 1);
 
 			if (mergedOutputs.empty())
 			{
@@ -1931,7 +1866,10 @@ public:
 				std::string outputDir = target.GetMakefile()->GetStartOutputDirectory();
 				mergedOutputs.push_back(outputDir + "/dummy-out-" + targetName + ".txt");
 			}
-			context.fc.WriteVariable("ExecOutput", Quote(Join(mergedOutputs, ";")));
+			// Currently fastbuild doesn't support more than 1
+			// output for a custom command (soon to change hopefully).
+			// so only use the first one
+			context.fc.WriteVariable("ExecOutput", Quote(mergedOutputs[0]));
 			
 		}
 		context.fc.WritePopScope();
