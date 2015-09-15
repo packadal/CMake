@@ -266,6 +266,13 @@ public:
 	{
 		// Unescape the Fastbuild configName symbol with $
 		cmSystemTools::ReplaceString(string, "$$ConfigName$$", "$ConfigName$");
+		cmSystemTools::ReplaceString(string, "^$ConfigName^$", "$ConfigName$");
+	}
+
+	static void ResolveFastbuildVariables(std::string& string, const std::string& configName)
+	{
+		// Replace Fastbuild configName with the config name
+		cmSystemTools::ReplaceString(string, "$ConfigName$", configName);
 	}
 
 	static std::string BuildCommandLine(
@@ -1270,9 +1277,9 @@ public:
 					"$CompilerRoot$\\mspdbcore.dll",
 					"$CompilerRoot$\\mspft120.dll",
 					"$CompilerRoot$\\1033\\clui.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC120.CRT\\msvcp120.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC120.CRT\\msvcr120.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC120.CRT\\vccorlib120.dll"
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC120.CRT\\msvcp120.dll",
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC120.CRT\\msvcr120.dll",
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC120.CRT\\vccorlib120.dll"
 				};
 				extraFiles.insert(extraFiles.end(), &vs2013_extraFiles[0], &vs2013_extraFiles[13]);
 			}
@@ -1287,11 +1294,11 @@ public:
 					"$CompilerRoot$\\c2.dll",
 					"$CompilerRoot$\\mspft110.dll",
 					"$CompilerRoot$\\1033\\clui.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC110.CRT\\msvcp110.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC110.CRT\\msvcr110.dll",
-					"$CompilerRoot$\\..\\..\\VC\\redist\\x86\\Microsoft.VC110.CRT\\vccorlib110.dll",
-					"$CompilerRoot$\\..\\..\\Common7\\IDE\\mspdb110.dll",
-					"$CompilerRoot$\\..\\..\\Common7\\IDE\\mspdbcore.dll"
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC110.CRT\\msvcp110.dll",
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC110.CRT\\msvcr110.dll",
+					"$CompilerRoot$\\..\\..\\redist\\x86\\Microsoft.VC110.CRT\\vccorlib110.dll",
+					"$CompilerRoot$\\..\\..\\..\\Common7\\IDE\\mspdb110.dll",
+					"$CompilerRoot$\\..\\..\\..\\Common7\\IDE\\mspdbcore.dll"
 				};
 				extraFiles.insert(extraFiles.end(), &vs2012_extraFiles[0], &vs2012_extraFiles[12]);
 			}
@@ -1366,7 +1373,9 @@ public:
 
 	static std::string Quote(const std::string& str, const std::string& quotation = "'")
 	{
-		return quotation + str + quotation;
+		std::string result = str;
+		cmSystemTools::ReplaceString(result, quotation, "^" + quotation);
+		return quotation + result + quotation;
 	}
 
 	static std::string Join(const std::vector<std::string>& elems, 
@@ -1699,56 +1708,6 @@ public:
 			Wrap(context.self->GetConfigurations(), ".config_", ""));
 	}
 
-	static std::string MakeCustomLauncher(
-		cmLocalFastbuildGenerator *lg,
-		cmCustomCommandGenerator const& ccg)
-	{
-		const char* property = "RULE_LAUNCH_CUSTOM";
-		const char* property_value = lg->GetMakefile()->GetProperty(property);
-
-		if (!property_value || !*property_value)
-		{
-			return std::string();
-		}
-
-		// Expand rules in the empty string.  It may insert the launcher and
-		// perform replacements.
-		cmLocalGenerator::RuleVariables vars;
-		vars.RuleLauncher = property;
-		std::string output;
-		const std::vector<std::string>& outputs = ccg.GetOutputs();
-		if (!outputs.empty())
-		{
-			cmLocalGenerator::RelativeRoot relative_root =
-				ccg.GetWorkingDirectory().empty() ? cmLocalGenerator::START_OUTPUT : cmLocalGenerator::NONE;
-
-			output = lg->Convert(outputs[0], relative_root, cmLocalGenerator::SHELL);
-		}
-		vars.Output = output.c_str();
-
-		std::string launcher;
-		lg->ExpandRuleVariables(launcher, vars);
-		if (!launcher.empty())
-		{
-			launcher += " ";
-		}
-
-		return launcher;
-	}
-
-	struct SourceFileNameIs
-	{
-		SourceFileNameIs(const std::string& name)
-		: m_name(name) {}
-
-		std::string m_name;
-
-		bool operator()(const cmSourceFile* sf) const
-		{
-			return sf->GetFullPath() == m_name;
-		}
-	};
-
 	static void WriteCustomCommand(
 		GenerationContext& context,
 		const cmCustomCommand* cc,
@@ -1772,27 +1731,15 @@ public:
 		// In which case, FASTBuild won't want them treated as 
 		// outputs.
 		{
-			cmGeneratorTarget *gt = context.self->GetGeneratorTarget(&target);
-			std::vector<cmSourceFile*> sourceFiles;
-			gt->GetSourceFiles(sourceFiles, configName);
-
 			// Loop through all outputs, and attempt to find it in the 
 			// source files.
 			for (size_t index = 0; index < mergedOutputs.size(); ++index)
 			{
 				const std::string& outputName = mergedOutputs[index];
 
-				std::vector<cmSourceFile*>::iterator findResult = std::find_if(
-					sourceFiles.begin(), sourceFiles.end(), SourceFileNameIs(outputName));
-
-				if (findResult == sourceFiles.end())
-				{
-					continue;
-				}
-				cmSourceFile* outputSourceFile = *findResult;
-
+				cmSourceFile* outputSourceFile = makefile->GetSource(outputName);
 				// Check if this file is symbolic
-				if (outputSourceFile->GetPropertyAsBool("SYMBOLIC"))
+				if (outputSourceFile && outputSourceFile->GetPropertyAsBool("SYMBOLIC"))
 				{
 					// We need to remove this file from the list of outputs
 					// Swap with back and pop
@@ -1852,42 +1799,31 @@ public:
 			}
 		}
 
-		std::vector<std::string> cmdLines;
-		if (ccg.GetNumberOfCommands() > 0) 
-		{
-			std::string wd = ccg.GetWorkingDirectory();
-			if (wd.empty())
-			{
-				wd = makefile->GetStartOutputDirectory();
-			}
-		
-			std::ostringstream cdCmd;
 #ifdef _WIN32
-			std::string cdStr = "cd /D ";
+		const std::string shellExt = ".bat";
 #else
-			std::string cdStr = "cd ";
+		const std::string shellExt = ".sh";
 #endif
-			cdCmd << cdStr << lg->ConvertToOutputFormat(wd, cmLocalGenerator::SHELL);
-			cmdLines.push_back(cdCmd.str());
-		}
 
-		std::string launcher = MakeCustomLauncher(lg, ccg);
+		std::string scriptFileName(ccg.GetWorkingDirectory() + targetName + ".bat");
+		cmsys::ofstream scriptFile(scriptFileName.c_str());
 
 		for (unsigned i = 0; i != ccg.GetNumberOfCommands(); ++i) 
 		{
-			cmdLines.push_back(launcher +
-				lg->ConvertToOutputFormat(ccg.GetCommand(i), cmLocalGenerator::SHELL));
+			std::string args;
+			ccg.AppendArguments(i, args);
+			cmSystemTools::ReplaceString(args, "$$", "$");
+#ifdef _WIN32
+			//in windows batch, '%' is a special character that needs to be doubled to be escaped
+			cmSystemTools::ReplaceString(args, "%", "%%");
+#endif
+			Detection::ResolveFastbuildVariables(args, configName);
 
-			std::string& cmd = cmdLines.back();
-			ccg.AppendArguments(i, cmd);
+			std::string command(ccg.GetCommand(i));
+			Detection::ResolveFastbuildVariables(command, configName);
+
+			scriptFile << command << args << std::endl;
 		}
-
-		std::string cmd = Detection::BuildCommandLine(cmdLines);
-		Detection::UnescapeFastbuildVariables(cmd);
-
-		std::string executable;
-		std::string args;
-		Detection::SplitExecutableAndFlags(cmd, executable, args);
 
 		// Write out an exec command
 		/*
@@ -1904,22 +1840,24 @@ public:
 			; but useful when Exec relies on externally generated files).
 		}
 		*/
-		
+
 		context.fc.WriteCommand("Exec", Quote(targetName));
 		context.fc.WritePushScope();
 		{
-			context.fc.WriteVariable("ExecExecutable", Quote(executable));
-			context.fc.WriteVariable("ExecArguments", Quote(args));
+#ifdef _WIN32
+			context.fc.WriteVariable("ExecExecutable", Quote(cmSystemTools::FindProgram("cmd.exe")));
+			context.fc.WriteVariable("ExecArguments", Quote("/C " + scriptFileName));
+#else
+			context.fc.WriteVariable("ExecExecutable", Quote(scriptFileName));
+#endif
+			if(!ccg.GetWorkingDirectory().empty())
+				context.fc.WriteVariable("ExecWorkingDir", Quote(ccg.GetWorkingDirectory()));
 
 			if (inputs.empty())
 			{
 				inputs.push_back("dummy-in");
 			}
 			context.fc.WriteArray("ExecInput", Wrap(inputs));
-			
-			// Currently fastbuild doesn't support more than 1
-			// output for a custom command (soon to change hopefully).
-			assert(mergedOutputs.size() <= 1);
 
 			if (mergedOutputs.empty())
 			{
@@ -1928,7 +1866,10 @@ public:
 				std::string outputDir = target.GetMakefile()->GetStartOutputDirectory();
 				mergedOutputs.push_back(outputDir + "/dummy-out-" + targetName + ".txt");
 			}
-			context.fc.WriteVariable("ExecOutput", Quote(Join(mergedOutputs, ";")));
+			// Currently fastbuild doesn't support more than 1
+			// output for a custom command (soon to change hopefully).
+			// so only use the first one
+			context.fc.WriteVariable("ExecOutput", Quote(mergedOutputs[0]));
 			
 		}
 		context.fc.WritePopScope();
@@ -2129,10 +2070,6 @@ public:
 		std::vector<std::string> dependencies;
 		Detection::DetectTargetCompileDependencies(context.self, target, dependencies);
 
-		// Output the prebuild/Prelink commands
-		WriteCustomBuildSteps(context, lg, target, target.GetPreBuildCommands(), "PreBuild", dependencies);
-		WriteCustomBuildSteps(context, lg, target, target.GetPreLinkCommands(), "PreLink", dependencies);
-
 		// Iterate over each configuration
 		// This time to define linker settings for each config
 		std::vector<std::string>::const_iterator
@@ -2185,6 +2122,26 @@ public:
 					Wrap(dependencies, "'", "-" + configName + "'"));
 			}
 
+			context.fc.WritePopScope();
+		}
+
+		// Output the prebuild/Prelink commands
+		WriteCustomBuildSteps(context, lg, target, target.GetPreBuildCommands(), "PreBuild", dependencies);
+		WriteCustomBuildSteps(context, lg, target, target.GetPreLinkCommands(), "PreLink", dependencies);
+
+		// Iterate over each configuration
+		// This time to define prebuild and post build targets for each config
+		configIter = context.self->GetConfigurations().begin();
+		configEnd = context.self->GetConfigurations().end();
+		for (; configIter != configEnd; ++configIter)
+		{
+			const std::string & configName = *configIter;
+
+			context.fc.WriteVariable("BaseCompilationConfig_" + configName, "");
+			context.fc.WritePushScopeStruct();
+
+			context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
+
 			// Add to the list of prebuild deps
 			// The prelink and prebuild commands
 			{
@@ -2205,7 +2162,7 @@ public:
 						"+");
 				}
 			}
-			
+
 			context.fc.WritePopScope();
 		}
 
@@ -2238,7 +2195,7 @@ public:
 				context.fc.WriteVariable("ObjectConfig_" + configName, "");
 				context.fc.WritePushScopeStruct();
 
-				context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
+				context.fc.WriteCommand("Using", ".BaseCompilationConfig_" + configName);
 				context.fc.WriteCommand("Using", ".CustomCommands_" + configName);
 
 				context.fc.WriteBlankLine();
@@ -2355,12 +2312,14 @@ public:
 
 				}
 
-				// Write an alias for this object group to group them all together
-				context.fc.WriteCommand("Alias", Quote(objectGroupRuleName));
-				context.fc.WritePushScope();
-				context.fc.WriteArray("Targets", 
-					Wrap(configObjectGroups, "'", "'"));
-				context.fc.WritePopScope();
+				if(!configObjectGroups.empty()) {
+					// Write an alias for this object group to group them all together
+					context.fc.WriteCommand("Alias", Quote(objectGroupRuleName));
+					context.fc.WritePushScope();
+					context.fc.WriteArray("Targets",
+						Wrap(configObjectGroups, "'", "'"));
+					context.fc.WritePopScope();
+				}
 
 				context.fc.WritePopScope();
 			}
