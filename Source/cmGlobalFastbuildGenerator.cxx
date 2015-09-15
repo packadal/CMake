@@ -2339,6 +2339,11 @@ public:
 					context.fc.WriteVariable("CompileFlags", Quote( command.flags ));
 					context.fc.WriteVariable("CompilerOptions", Quote("$CompileFlags$ $CompileDefineFlags$ $CompilerCmdBaseFlags$"));
 
+					if(objectGroupLanguage == "RC")
+					{
+						context.fc.WriteVariable("CompilerOutputExtension", Quote( ".res" ));
+					}
+
 					/*
 					if (Detection::DetectPrecompiledHeader(command.flags + " " + 
 						baseCompileFlags + " " + command.defines,
