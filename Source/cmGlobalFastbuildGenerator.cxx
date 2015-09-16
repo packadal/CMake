@@ -2306,6 +2306,10 @@ public:
 						{
 							context.fc.WriteVariable("CompilerOutputExtension", Quote( ".res" ));
 						}
+						else
+						{
+							context.fc.WriteVariable("CompilerOutputExtension", Quote( "." + objectGroupLanguage + ".obj" ));
+						}
 
 						/*
 						if (Detection::DetectPrecompiledHeader(command.flags + " " +
