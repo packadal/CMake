@@ -262,6 +262,11 @@ private:
 class cmGlobalFastbuildGenerator::Detail::Detection
 {
 public:
+	static std::string GetLastFolderName(const std::string& string)
+	{
+		return string.substr(string.rfind('/'));
+	}
+
 	static void UnescapeFastbuildVariables(std::string& string)
 	{
 		// Unescape the Fastbuild configName symbol with $
@@ -2017,7 +2022,7 @@ public:
 	{
 		std::string defines;
 		std::string flags;
-		std::vector<std::string> sourceFiles;
+		std::map<std::string, std::vector<std::string> > sourceFiles;
 	};
 
 	static void WriteTargetDefinition(GenerationContext& context,
@@ -2200,14 +2205,6 @@ public:
 
 				context.fc.WriteBlankLine();
 				context.fc.WriteComment("Compiler options:");
-				{
-					// Tie together the variables
-					std::string targetCompileOutDirectory =
-						Detection::DetectTargetCompileOutputDir(lg, target, configName);
-					context.fc.WriteVariable("CompilerOutputPath", Quote(targetCompileOutDirectory));
-
-					std::string compileObjectCmd = Detection::DetectCompileRule(lg, target, objectGroupLanguage);
-				}
 
 				// Compiler options
 				std::string baseCompileFlags;
@@ -2264,7 +2261,7 @@ public:
 
 						std::string configKey = compilerFlags + "{|}" + compileDefines;
 						CompileCommand& command = commandPermutations[configKey];
-						command.sourceFiles.push_back(sourceFile);
+						command.sourceFiles[srcFile->GetLocation().GetDirectory()].push_back(sourceFile);
 						command.flags = compilerFlags;
 						command.defines = compileDefines;
 					}
@@ -2279,36 +2276,47 @@ public:
 					++groupIter)
 				{
 					const CompileCommand& command = groupIter->second;
-					std::stringstream ruleName;
-					ruleName << objectGroupRuleName << "-" << (groupNameCount++);
-					configObjectGroups.push_back(ruleName.str());
 
-					context.fc.WriteCommand("ObjectList", Quote(ruleName.str()));
-					context.fc.WritePushScope();
-
-					context.fc.WriteArray("CompilerInputFiles", 
-						Wrap(command.sourceFiles, "'", "'"));
-
-					// Unity source files:
-					context.fc.WriteVariable("UnityInputFiles", ".CompilerInputFiles");
-
-					context.fc.WriteVariable("CompileDefineFlags", Quote( command.defines ));
-					context.fc.WriteVariable("CompileFlags", Quote( command.flags ));
-					context.fc.WriteVariable("CompilerOptions", Quote("$CompileFlags$ $CompileDefineFlags$ $CompilerCmdBaseFlags$"));
-
-					if(objectGroupLanguage == "RC")
+					std::map<std::string, std::vector<std::string> >::const_iterator objectListIt;
+					for(objectListIt = command.sourceFiles.begin(); objectListIt != command.sourceFiles.end(); ++objectListIt)
 					{
-						context.fc.WriteVariable("CompilerOutputExtension", Quote( ".res" ));
-					}
+						const std::string folderName(Detection::GetLastFolderName(objectListIt->first));
+						std::stringstream ruleName;
+						ruleName << objectGroupRuleName << "-" << folderName << "-" << (groupNameCount++);
+						configObjectGroups.push_back(ruleName.str());
 
-					/*
-					if (Detection::DetectPrecompiledHeader(command.flags + " " + 
-						baseCompileFlags + " " + command.defines,
-						preCompiledHeaderInput,
-						preCompiledHeaderOutput,
-						preCompiledHeaderOptions)
-					*/
-					context.fc.WritePopScope();
+						context.fc.WriteCommand("ObjectList", Quote(ruleName.str()));
+						context.fc.WritePushScope();
+
+						std::string targetCompileOutDirectory =
+							Detection::DetectTargetCompileOutputDir(lg, target, configName);
+						context.fc.WriteVariable("CompilerOutputPath", Quote(targetCompileOutDirectory + "/" + folderName));
+
+						context.fc.WriteArray("CompilerInputFiles",
+							Wrap(objectListIt->second, "'", "'"));
+
+						// Unity source files:
+						context.fc.WriteVariable("UnityInputFiles", ".CompilerInputFiles");
+
+						context.fc.WriteVariable("CompileDefineFlags", Quote( command.defines ));
+						context.fc.WriteVariable("CompileFlags", Quote( command.flags ));
+						context.fc.WriteVariable("CompilerOptions", Quote("$CompileFlags$ $CompileDefineFlags$ $CompilerCmdBaseFlags$"));
+
+						if(objectGroupLanguage == "RC")
+						{
+							context.fc.WriteVariable("CompilerOutputExtension", Quote( ".res" ));
+						}
+
+						/*
+						if (Detection::DetectPrecompiledHeader(command.flags + " " +
+							baseCompileFlags + " " + command.defines,
+							preCompiledHeaderInput,
+							preCompiledHeaderOutput,
+							preCompiledHeaderOptions)
+						*/
+						context.fc.WritePopScope();
+
+					}
 
 				}
 
