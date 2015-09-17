@@ -262,6 +262,25 @@ private:
 class cmGlobalFastbuildGenerator::Detail::Detection
 {
 public:
+
+	static std::string GetLastFolderName(const std::string& string)
+	{
+		return string.substr(string.rfind('/'));
+	}
+
+	static bool IsExcludedFromAll( cmTarget* target )
+	{
+		bool excluded = target->GetPropertyAsBool("EXCLUDE_FROM_ALL");
+		cmLocalGenerator* lg = target->GetMakefile()->GetLocalGenerator();
+		while(lg->GetParent() != 0 && !excluded)
+		{
+			excluded = lg->GetMakefile()->GetPropertyAsBool("EXCLUDE_FROM_ALL");
+			lg = lg->GetParent();
+		}
+
+		return excluded;
+	}
+
 	static void UnescapeFastbuildVariables(std::string& string)
 	{
 		// Unescape the Fastbuild configName symbol with $
@@ -2620,7 +2639,7 @@ public:
 
 				perTarget[targetName].push_back(aliasName);
 
-				if (!target->GetPropertyAsBool("EXCLUDE_FROM_ALL"))
+				if (!Detection::IsExcludedFromAll(target))
 				{
 					perConfig[configName].push_back(aliasName);
 				}
