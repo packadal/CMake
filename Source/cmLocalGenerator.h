@@ -176,7 +176,7 @@ public:
                          std::string& dep);
 
   virtual std::string ConvertToIncludeReference(std::string const& path,
-                                                OutputFormat format = SHELL,
+                                                cmOutputConverter::OutputFormat format = SHELL,
                                                 bool forceFullPaths = false);
 
   /** Called from command-line hook to clear dependencies.  */

@@ -731,6 +731,50 @@ if(APPLE)
   target_link_libraries(CPackLib "-framework Carbon")
 endif()
 
+find_package(PythonLibs REQUIRED)
+include_directories(${PYTHON_INCLUDE_DIRS})
+
+set_target_properties( CMakeLib
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+set_target_properties( cmsys
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+set_target_properties( cmlibarchive
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+set_target_properties( cmliblzma
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+set_target_properties( cmzlib
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+set_target_properties( cmbzip2
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+set_target_properties( cmcurl
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+set_target_properties( cmjsoncpp
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+
+
+add_library(_cmake SHARED wrapping/cmake_wrap.cxx)
+target_link_libraries(_cmake CMakeLib)
+set_target_properties( _cmake
+    PROPERTIES
+    PREFIX "")
+
+
 if(APPLE)
   add_executable(cmakexbuild cmakexbuild.cxx)
   target_link_libraries(cmakexbuild CMakeLib)

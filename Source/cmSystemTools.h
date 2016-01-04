@@ -431,6 +431,8 @@ public:
   static std::string const& GetCMClDepsCommand();
   static std::string const& GetCMakeRoot();
 
+  static void SetCMakeRoot(const std::string& cmakeRoot);
+
   /** Echo a message in color using KWSys's Terminal cprintf.  */
   static void MakefileColorEcho(int color, const char* message,
                                 bool newLine, bool enabled);

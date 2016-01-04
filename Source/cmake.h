@@ -354,6 +354,10 @@ class cmake
   cmState::Snapshot GetCurrentSnapshot() const
   { return this->CurrentSnapshot; }
 
+  //! Make sure all commands are what they say they are and there is no
+  /// macros.
+  void CleanupCommandsAndMacros();
+
 protected:
   void RunCheckForUnusedVariables();
   void InitializeProperties();
@@ -393,10 +397,6 @@ protected:
   int CheckBuildSystem();
 
   void SetDirectoriesFromFile(const char* arg);
-
-  //! Make sure all commands are what they say they are and there is no
-  /// macros.
-  void CleanupCommandsAndMacros();
 
   void GenerateGraphViz(const char* fileName) const;
 

@@ -205,11 +205,11 @@ public:
   unsigned int GetCacheMinorVersion() const
     { return this->CacheMinorVersion; }
 
-protected:
   ///! Add an entry into the cache
   void AddCacheEntry(const std::string& key, const char* value,
                      const char* helpString,
                      cmState::CacheEntryType type);
+  protected:
 
   ///! Get a cache entry object for a key
   CacheEntry *GetCacheEntry(const std::string& key);

@@ -1634,7 +1634,7 @@ void cmMakefile::Configure()
   std::string currentStart =
       this->StateSnapshot.GetDirectory().GetCurrentSource();
   currentStart += "/CMakeLists.txt";
-  assert(cmSystemTools::FileExists(currentStart.c_str(), true));
+//  assert(cmSystemTools::FileExists(currentStart.c_str(), true));
   this->AddDefinition("CMAKE_PARENT_LIST_FILE", currentStart.c_str());
 
   cmListFile listFile;

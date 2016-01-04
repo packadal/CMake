@@ -2400,6 +2400,11 @@ std::string const& cmSystemTools::GetCMakeRoot()
   return cmSystemToolsCMakeRoot;
 }
 
+void cmSystemTools::SetCMakeRoot(const std::string& cmakeRoot)
+{
+  cmSystemToolsCMakeRoot = cmakeRoot;
+}
+
 //----------------------------------------------------------------------------
 void cmSystemTools::MakefileColorEcho(int color, const char* message,
                                       bool newline, bool enabled)
