@@ -236,7 +236,6 @@ public:
   const char* GetInitializedCacheValue(std::string const& key) const;
   CacheEntryType GetCacheEntryType(std::string const& key) const;
   void SetCacheEntryValue(std::string const& key, std::string const& value);
-  void SetCacheValue(std::string const& key, std::string const& value);
 
   void RemoveCacheEntry(std::string const& key);
 

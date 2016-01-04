@@ -81,8 +81,6 @@ public:
 
   bool ReadDependentFile(const char* filename, bool noPolicyScope = true);
 
-  bool ProcessBuildsystemFile(const char* filename);
-
   /**
    * Add a function blocker to this makefile
    */
