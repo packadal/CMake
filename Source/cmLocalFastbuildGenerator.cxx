@@ -18,14 +18,15 @@
 #ifdef _WIN32
 #include "windows.h"
 #endif
-
+#define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
 //----------------------------------------------------------------------------
 cmLocalFastbuildGenerator::cmLocalFastbuildGenerator()
 {
 #ifdef _WIN32
 	this->WindowsShell = true;
 #endif
-	this->TargetImplib = "$TargetOutputImplib$";
+	this->TargetImplib = FASTBUILD_DOLLAR_TAG "TargetOutputImplib" FASTBUILD_DOLLAR_TAG;
+	//this->LinkScriptShell = true;
 }
 
 //----------------------------------------------------------------------------
@@ -56,7 +57,7 @@ std::string cmLocalFastbuildGenerator::ConvertToLinkReference(
 	std::string const& lib,
     OutputFormat format)
 {
-	return this->Convert(lib, HOME_OUTPUT, format);
+	return "";// this->Convert(lib, HOME_OUTPUT, format);
 }
 
 //----------------------------------------------------------------------------
@@ -102,7 +103,7 @@ void cmLocalFastbuildGenerator::AppendFlagEscape(std::string& flags,
 	std::string escapedFlag = this->EscapeForShell(rawFlag);
 	// Other make systems will remove the double $ but
 	// fastbuild uses ^$ to escape it. So switch to that.
-	cmSystemTools::ReplaceString(escapedFlag, "$$", "^$");
+	//cmSystemTools::ReplaceString(escapedFlag, "$$", "^$");
 	this->AppendFlags(flags, escapedFlag);
 }
 
