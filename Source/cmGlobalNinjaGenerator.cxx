@@ -1040,6 +1040,62 @@ void cmGlobalNinjaGenerator::WriteTargetAliases(std::ostream& os)
                           cmNinjaDeps(1, i->first),
                           deps);
   }
+
+  cmGlobalNinjaGenerator::WriteDivider(os);
+  os << "# Folder targets.\n\n";
+
+  std::map<std::string, cmNinjaDeps > targetsPerFolder;
+
+  for ( std::vector<cmLocalGenerator *>::const_iterator generatorIt = this->LocalGenerators.begin();
+        generatorIt != this->LocalGenerators.end();
+        ++generatorIt)
+    {
+    const cmLocalGenerator* localGenerator = *generatorIt;
+    const std::string currentSourceFolder( localGenerator->GetStateSnapshot().GetDirectory().GetCurrentSource() );
+    targetsPerFolder[currentSourceFolder] = cmNinjaDeps();
+    for ( std::vector<cmGeneratorTarget*>::const_iterator targetIt = localGenerator->GetGeneratorTargets().begin();
+          targetIt != localGenerator->GetGeneratorTargets().end();
+          ++targetIt)
+      {
+      const cmGeneratorTarget* generatorTarget = *targetIt;
+
+      const int type = generatorTarget->GetType();
+      if((type == cmState::EXECUTABLE) ||
+         (type == cmState::STATIC_LIBRARY) ||
+         (type == cmState::SHARED_LIBRARY) ||
+         (type == cmState::MODULE_LIBRARY) ||
+         (type == cmState::OBJECT_LIBRARY) ||
+         (type == cmState::UTILITY))
+        {
+
+        // insert the current target in every folder whose name contains the current target's folder
+        for ( std::map<std::string, cmNinjaDeps >::iterator it = targetsPerFolder.begin(); it != targetsPerFolder.end(); ++it )
+          {
+          if( currentSourceFolder.find( it->first ) != std::string::npos )
+            {
+            it->second.push_back( generatorTarget->GetName() );
+            }
+          }
+        }
+      }
+    }
+
+  for ( std::map<std::string, cmNinjaDeps >::const_iterator it = targetsPerFolder.begin(); it != targetsPerFolder.end(); ++it )
+    {
+    if ( it->second.empty() )
+      continue;
+
+    cmGlobalNinjaGenerator::WriteDivider( os );
+
+    cmLocalGenerator* firstLocalGenerator = this->LocalGenerators[0];
+    const std::string rootSourceDir = firstLocalGenerator->GetSourceDirectory();
+    const std::string folderRelativeToSource = "path/" +  std::string(it->first).replace( 0, rootSourceDir.size() + 1, "" );
+    const std::string comment = "Folder: " + std::string(it->first);
+    cmNinjaDeps output(1);
+    output.push_back( folderRelativeToSource );
+
+    this->WritePhonyBuild(os, comment, output, it->second);
+    }
 }
 
 void cmGlobalNinjaGenerator::WriteUnknownExplicitDependencies(std::ostream& os)
