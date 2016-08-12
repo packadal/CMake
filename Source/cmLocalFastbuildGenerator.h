@@ -32,7 +32,7 @@ class cmLocalFastbuildGenerator
 {
 public:
   
-	cmLocalFastbuildGenerator();
+	cmLocalFastbuildGenerator(cmGlobalGenerator *gg, cmMakefile *makefile);
 	virtual ~cmLocalFastbuildGenerator();
 
 	virtual void Generate();
@@ -45,7 +45,7 @@ public:
 		std::map<cmSourceFile const*, std::string>& mapping,
 		cmGeneratorTarget const* gt);
 	virtual std::string GetTargetDirectory(
-		cmTarget const& target) const;
+        cmGeneratorTarget const* target) const;
 	virtual void AppendFlagEscape(std::string& flags,
 		const std::string& rawFlag);
 
