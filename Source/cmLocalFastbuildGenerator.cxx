@@ -11,20 +11,22 @@
 ============================================================================*/
 #include "cmLocalFastbuildGenerator.h"
 #include "cmCustomCommandGenerator.h"
+#include "cmGeneratorTarget.h"
 #include "cmGlobalGenerator.h"
 #include "cmMakefile.h"
 #include "cmSourceFile.h"
 #include "cmSystemTools.h"
+
 #ifdef _WIN32
 #include "windows.h"
 #endif
 #define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
 //----------------------------------------------------------------------------
-cmLocalFastbuildGenerator::cmLocalFastbuildGenerator()
+cmLocalFastbuildGenerator::cmLocalFastbuildGenerator(cmGlobalGenerator* gg,
+                                                     cmMakefile* makefile)
+  : cmLocalCommonGenerator(gg, makefile,
+                           makefile->GetState()->GetBinaryDirectory())
 {
-#ifdef _WIN32
-  this->WindowsShell = true;
-#endif
   this->TargetImplib =
     FASTBUILD_DOLLAR_TAG "TargetOutputImplib" FASTBUILD_DOLLAR_TAG;
   // this->LinkScriptShell = true;
@@ -75,10 +77,10 @@ void cmLocalFastbuildGenerator::ComputeObjectFilenames(
 
 //----------------------------------------------------------------------------
 std::string cmLocalFastbuildGenerator::GetTargetDirectory(
-  cmTarget const& target) const
+  const cmGeneratorTarget* target) const
 {
   std::string dir = cmake::GetCMakeFilesDirectoryPostSlash();
-  dir += target.GetName();
+  dir += target->GetName();
 #if defined(__VMS)
   dir += "_dir";
 #else
