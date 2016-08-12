@@ -491,6 +491,7 @@ if (WIN32)
       cmGlobalVisualStudio15Generator.h
       cmGlobalVisualStudio15Generator.cxx
       cmGlobalVisualStudioGenerator.cxx
+      cmGlobalVisualStudioGenerator.h
       cmGlobalGenerator.h
       cmIDEFlagTable.h
       cmIDEOptions.cxx
@@ -554,6 +555,8 @@ set(SRCS ${SRCS}
   cmGlobalFastbuildGenerator.cxx
   cmLocalFastbuildGenerator.cxx
   cmLocalFastbuildGenerator.h
+  cmFastbuildTargetGenerator.cxx
+  cmFastbuildTargetGenerator.h
   )
 
   if(WIN32 AND NOT CYGWIN)

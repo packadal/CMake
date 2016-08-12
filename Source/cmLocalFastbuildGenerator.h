@@ -3,9 +3,9 @@
 #ifndef cmLocalFastbuildGenerator_h
 #define cmLocalFastbuildGenerator_h
 
-#include "cmLocalGenerator.h"
+#include "cmLocalCommonGenerator.h"
 
-#include <cmsys/auto_ptr.hxx>
+#include <cm_auto_ptr.hxx>
 
 class cmSourceFile;
 class cmSourceGroup;
@@ -18,10 +18,10 @@ class cmCustomCommandGenerator;
  * cmLocalFastbuildGenerator provides functionality common to all
  * Visual Studio generators.
  */
-class cmLocalFastbuildGenerator : public cmLocalGenerator
+class cmLocalFastbuildGenerator : public cmLocalCommonGenerator
 {
 public:
-  cmLocalFastbuildGenerator();
+  cmLocalFastbuildGenerator(cmGlobalGenerator* gg, cmMakefile* makefile);
   virtual ~cmLocalFastbuildGenerator();
 
   virtual void Generate();
@@ -32,7 +32,8 @@ public:
   virtual void ComputeObjectFilenames(
     std::map<cmSourceFile const*, std::string>& mapping,
     cmGeneratorTarget const* gt);
-  virtual std::string GetTargetDirectory(cmTarget const& target) const;
+  virtual std::string GetTargetDirectory(
+    cmGeneratorTarget const* target) const;
   virtual void AppendFlagEscape(std::string& flags,
                                 const std::string& rawFlag);
 };
