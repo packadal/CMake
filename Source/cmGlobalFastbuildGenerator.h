@@ -283,15 +283,12 @@ public:
 
       struct GenerationContext
       {
-        GenerationContext(cmGlobalFastbuildGenerator* globalGen,
-                          cmLocalCommonGenerator* localGen,
+        GenerationContext(cmLocalCommonGenerator* localGen,
                           FileContext& fileCtx)
-          : self(globalGen)
-          , root(localGen)
+          : root(localGen)
           , fc(fileCtx)
         {
         }
-        cmGlobalFastbuildGenerator* self;
         cmLocalCommonGenerator* root;
         FileContext& fc;
         OrderedTargets orderedTargets;
