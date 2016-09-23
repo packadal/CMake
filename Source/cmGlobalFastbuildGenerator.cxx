@@ -664,32 +664,27 @@ void cmGlobalFastbuildGenerator::Detail::Generation::GenerateRootBFF(
   fname += "/fbuild.bff";
 
   self->g_fc.setFileName(fname);
-  GenerationContext context(self, root, self->g_fc);
+  GenerationContext context(root, self->g_fc);
   Detection::ComputeTargetOrderAndDependencies(self, context.orderedTargets);
   Detection::StripNestedGlobalTargets(context.orderedTargets);
   BuildTargetContexts(self, context.targetContexts);
-  WriteRootBFF(context);
+  // write root bff
+  self->g_fc.WriteSectionHeader("Fastbuild makefile - Generated using CMAKE");
 
-  self->g_fc.close();
-  self->FileReplacedDuringGenerate(fname);
-}
-
-void cmGlobalFastbuildGenerator::Detail::Generation::WriteRootBFF(
-  GenerationContext& context)
-{
-  context.fc.WriteSectionHeader("Fastbuild makefile - Generated using CMAKE");
-
-  WritePlaceholders(context.fc);
-  WriteSettings(context.fc,
-                context.self->GetCMakeInstance()->GetHomeOutputDirectory());
+  WritePlaceholders(self->g_fc);
+  WriteSettings(self->g_fc,
+                self->GetCMakeInstance()->GetHomeOutputDirectory());
   WriteCompilers(context);
-  WriteConfigurations(context.fc, context.root->GetMakefile());
+  WriteConfigurations(self->g_fc, root->GetMakefile());
 
   // Sort targets
   WriteTargetDefinitions(context, false);
   WriteAliases(context, false);
   WriteTargetDefinitions(context, true);
   WriteAliases(context, true);
+
+  self->g_fc.close();
+  self->FileReplacedDuringGenerate(fname);
 }
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WritePlaceholders(
