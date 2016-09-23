@@ -10,98 +10,99 @@
   See the License for more information.
 ============================================================================*/
 #include "cmLocalFastbuildGenerator.h"
+#include "cmCustomCommandGenerator.h"
 #include "cmGlobalGenerator.h"
 #include "cmMakefile.h"
 #include "cmSourceFile.h"
 #include "cmSystemTools.h"
-#include "cmCustomCommandGenerator.h"
 #ifdef _WIN32
 #include "windows.h"
 #endif
 #define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
 //----------------------------------------------------------------------------
-cmLocalFastbuildGenerator::cmLocalFastbuildGenerator(cmGlobalGenerator* gg, cmMakefile* makefile)
-: cmLocalGenerator(gg, makefile)
+cmLocalFastbuildGenerator::cmLocalFastbuildGenerator(cmGlobalGenerator* gg,
+                                                     cmMakefile* makefile)
+  : cmLocalCommonGenerator(gg, makefile)
 {
-	this->TargetImplib = FASTBUILD_DOLLAR_TAG "TargetOutputImplib" FASTBUILD_DOLLAR_TAG;
-	//this->LinkScriptShell = true;
+  this->TargetImplib =
+    FASTBUILD_DOLLAR_TAG "TargetOutputImplib" FASTBUILD_DOLLAR_TAG;
+  // this->LinkScriptShell = true;
 }
 
 //----------------------------------------------------------------------------
 cmLocalFastbuildGenerator::~cmLocalFastbuildGenerator()
 {
-
 }
 
 //----------------------------------------------------------------------------
 void cmLocalFastbuildGenerator::Generate()
 {
-	// Debug messages
-	//std::cout << "======== LOCAL Fastbuild Gen ========\n";
-	//GetMakefile()->Print();
+  // Debug messages
+  // std::cout << "======== LOCAL Fastbuild Gen ========\n";
+  // GetMakefile()->Print();
 
-	// Now generate information for this generator
+  // Now generate information for this generator
 }
 
 //----------------------------------------------------------------------------
-void cmLocalFastbuildGenerator::ExpandRuleVariables(std::string& s, 
-	const RuleVariables& replaceValues)
+void cmLocalFastbuildGenerator::ExpandRuleVariables(
+  std::string& s, const RuleVariables& replaceValues)
 {
-	return cmLocalGenerator::ExpandRuleVariables( s, replaceValues );
+  return cmLocalGenerator::ExpandRuleVariables(s, replaceValues);
 }
 
 //----------------------------------------------------------------------------
 std::string cmLocalFastbuildGenerator::ConvertToLinkReference(
-	std::string const& lib,
-    OutputFormat format)
+  std::string const& lib, OutputFormat format)
 {
-	return "";// this->Convert(lib, HOME_OUTPUT, format);
+  return ""; // this->Convert(lib, HOME_OUTPUT, format);
 }
 
 //----------------------------------------------------------------------------
 void cmLocalFastbuildGenerator::ComputeObjectFilenames(
-	std::map<cmSourceFile const*, std::string>& mapping,
-	cmGeneratorTarget const* gt)
+  std::map<cmSourceFile const*, std::string>& mapping,
+  cmGeneratorTarget const* gt)
 {
-	for (std::map<cmSourceFile const*, std::string>::iterator
-		si = mapping.begin(); si != mapping.end(); ++si)
-	{
-		cmSourceFile const* sf = si->first;
-		si->second = this->GetObjectFileNameWithoutTarget(*sf,
-			gt->ObjectDirectory);
-	}
+  for (std::map<cmSourceFile const*, std::string>::iterator si =
+         mapping.begin();
+       si != mapping.end(); ++si) {
+    cmSourceFile const* sf = si->first;
+    si->second =
+      this->GetObjectFileNameWithoutTarget(*sf, gt->ObjectDirectory);
+  }
 }
 
 //----------------------------------------------------------------------------
-std::string cmLocalFastbuildGenerator::GetTargetDirectory(const cmGeneratorTarget *target) const
+std::string cmLocalFastbuildGenerator::GetTargetDirectory(
+  const cmGeneratorTarget* target) const
 {
-	std::string dir = cmake::GetCMakeFilesDirectoryPostSlash();
-    dir += target->GetName();
+  std::string dir = cmake::GetCMakeFilesDirectoryPostSlash();
+  dir += target->GetName();
 #if defined(__VMS)
-	dir += "_dir";
+  dir += "_dir";
 #else
-	dir += ".dir";
+  dir += ".dir";
 #endif
-	return dir;
+  return dir;
 }
 
 //----------------------------------------------------------------------------
-std::string EncodeLiteral(const std::string &lit)
+std::string EncodeLiteral(const std::string& lit)
 {
-	std::string result = lit;
-	cmSystemTools::ReplaceString(result, "$", "^$");
-	return result;
+  std::string result = lit;
+  cmSystemTools::ReplaceString(result, "$", "^$");
+  return result;
 }
 
 //----------------------------------------------------------------------------
 void cmLocalFastbuildGenerator::AppendFlagEscape(std::string& flags,
-	const std::string& rawFlag)
+                                                 const std::string& rawFlag)
 {
-	std::string escapedFlag = this->EscapeForShell(rawFlag);
-	// Other make systems will remove the double $ but
-	// fastbuild uses ^$ to escape it. So switch to that.
-	//cmSystemTools::ReplaceString(escapedFlag, "$$", "^$");
-	this->AppendFlags(flags, escapedFlag);
+  std::string escapedFlag = this->EscapeForShell(rawFlag);
+  // Other make systems will remove the double $ but
+  // fastbuild uses ^$ to escape it. So switch to that.
+  // cmSystemTools::ReplaceString(escapedFlag, "$$", "^$");
+  this->AppendFlags(flags, escapedFlag);
 }
 
 //----------------------------------------------------------------------------
