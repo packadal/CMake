@@ -186,6 +186,10 @@ Errors while running CTest
 #include "cmFastbuildNormalTargetGenerator.h"
 #include "cmFastbuildUtilityTargetGenerator.h"
 
+const char* cmGlobalFastbuildGenerator::FASTBUILD_DOLLAR_TAG =
+  "FASTBUILD_DOLLAR_TAG";
+#define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
+
 cmGlobalFastbuildGenerator::Detail::FileContext::FileContext()
 {
 }
@@ -313,8 +317,6 @@ bool cmGlobalFastbuildGenerator::Detail::Detection::IsExcludedFromAll(
 
   return excluded;
 }
-
-#define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
 
 void cmGlobalFastbuildGenerator::Detail::Detection::UnescapeFastbuildVariables(
   std::string& string)
@@ -718,8 +720,7 @@ void cmGlobalFastbuildGenerator::Detail::Detection::DetectBaseCompileCommand(
 }
 
 void cmGlobalFastbuildGenerator::Detail::Detection::DetectLanguages(
-  std::set<std::string>& languages, cmGlobalCommonGenerator* self,
-  const cmGeneratorTarget* generatorTarget)
+  std::set<std::string>& languages, const cmGeneratorTarget* generatorTarget)
 {
   // Object libraries do not have linker stages
   // nor utilities
@@ -943,110 +944,6 @@ void cmGlobalFastbuildGenerator::Detail::Detection::DependencySorter::
   }
 }
 
-template <class TType, class TTypeHelper>
-void cmGlobalFastbuildGenerator::Detail::Detection::DependencySorter::Sort(
-  TTypeHelper& helper, std::vector<TType*>& entries)
-{
-  typedef std::vector<std::string> StringVector;
-  typedef std::vector<const TType*> OrderedEntrySet;
-  typedef std::map<std::string, const TType*> OutputMap;
-
-  // Build up a map of outputNames to entries
-  OutputMap outputMap;
-  for (typename OrderedEntrySet::iterator iter = entries.begin();
-       iter != entries.end(); ++iter) {
-    const TType* entry = *iter;
-    StringVector outputs;
-    helper.GetOutputs(entry, outputs);
-
-    for (StringVector::iterator outIter = outputs.begin();
-         outIter != outputs.end(); ++outIter) {
-      outputMap[*outIter] = entry;
-    }
-  }
-
-  // Now build a forward and reverse map of dependencies
-  // Build the reverse graph,
-  // each target, and the set of things that depend upon it
-  typedef std::map<const TType*, std::vector<const TType*> > DepMap;
-  DepMap forwardDeps;
-  DepMap reverseDeps;
-  for (typename OrderedEntrySet::iterator iter = entries.begin();
-       iter != entries.end(); ++iter) {
-    const TType* entry = *iter;
-    std::vector<const TType*>& entryInputs = forwardDeps[entry];
-
-    StringVector inputs;
-    helper.GetInputs(entry, inputs);
-    for (StringVector::const_iterator inIter = inputs.begin();
-         inIter != inputs.end(); ++inIter) {
-      const std::string& input = *inIter;
-      // Lookup the input in the output map and find the right entry
-      typename OutputMap::iterator findResult = outputMap.find(input);
-      if (findResult != outputMap.end()) {
-        const TType* dentry = findResult->second;
-        entryInputs.push_back(dentry);
-        reverseDeps[dentry].push_back(entry);
-      }
-    }
-  }
-
-  // We have all the information now.
-  // Clear the array passed in
-  entries.clear();
-
-  // Now iterate over each target with its list of dependencies.
-  // And dump out ones that have 0 dependencies.
-  bool written = true;
-  while (!forwardDeps.empty() && written) {
-    written = false;
-    for (typename DepMap::iterator iter = forwardDeps.begin();
-         iter != forwardDeps.end(); ++iter) {
-      std::vector<const TType*>& fwdDeps = iter->second;
-      const TType* entry = iter->first;
-      if (!fwdDeps.empty()) {
-        // Looking for empty dependency lists.
-        // Those are the next to be written out
-        continue;
-      }
-
-      // dependency list is empty,
-      // add it to the output list
-      written = true;
-      entries.push_back(entry);
-
-      // Use reverse dependencies to determine
-      // what forward dep lists to adjust
-      std::vector<const TType*>& revDeps = reverseDeps[entry];
-      for (unsigned int i = 0; i < revDeps.size(); ++i) {
-        const TType* revDep = revDeps[i];
-
-        // Fetch the list of deps on that target
-        std::vector<const TType*>& revDepFwdDeps = forwardDeps[revDep];
-        // remove the one we just added from the list
-        revDepFwdDeps.erase(
-          std::remove(revDepFwdDeps.begin(), revDepFwdDeps.end(), entry),
-          revDepFwdDeps.end());
-      }
-
-      // Remove it from forward deps so not
-      // considered again
-      forwardDeps.erase(entry);
-
-      // Must break now as we've invalidated
-      // our forward deps iterator
-      break;
-    }
-  }
-
-  // Validation...
-  // Make sure we managed to find a place
-  // to insert every dependency.
-  // If this fires, then there is most likely
-  // a cycle in the graph...
-  assert(forwardDeps.empty());
-}
-
 void cmGlobalFastbuildGenerator::Detail::Detection::
   ComputeTargetOrderAndDependencies(cmGlobalFastbuildGenerator* gg,
                                     OrderedTargetSet& orderedTargets)
@@ -1260,17 +1157,6 @@ std::string cmGlobalFastbuildGenerator::Detail::Generation::EncodeLiteral(
   return result;
 }
 
-void cmGlobalFastbuildGenerator::Detail::Generation::EnsureDirectoryExists(
-  const std::string& path, const char* homeOutputDirectory)
-{
-  if (cmSystemTools::FileIsFullPath(path.c_str())) {
-    cmSystemTools::MakeDirectory(path.c_str());
-  } else {
-    const std::string fullPath = std::string(homeOutputDirectory) + "/" + path;
-    cmSystemTools::MakeDirectory(fullPath.c_str());
-  }
-}
-
 void cmGlobalFastbuildGenerator::Detail::Generation::BuildTargetContexts(
   cmGlobalFastbuildGenerator* gg, TargetContextMap& map)
 {
@@ -1323,10 +1209,9 @@ void cmGlobalFastbuildGenerator::Detail::Generation::GenerateRootBFF(
 
   self->g_fc.setFileName(fname);
   GenerationContext context(self, root, self->g_fc);
-  Detection::ComputeTargetOrderAndDependencies(context.self,
-                                               context.orderedTargets);
+  Detection::ComputeTargetOrderAndDependencies(self, context.orderedTargets);
   Detection::StripNestedGlobalTargets(context.orderedTargets);
-  BuildTargetContexts(context.self, context.targetContexts);
+  BuildTargetContexts(self, context.targetContexts);
   WriteRootBFF(context);
 
   self->g_fc.close();
@@ -1338,13 +1223,13 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteRootBFF(
 {
   context.fc.WriteSectionHeader("Fastbuild makefile - Generated using CMAKE");
 
-  WritePlaceholders(context);
-  WriteSettings(context);
+  WritePlaceholders(context.fc);
+  WriteSettings(context.fc,
+                context.self->GetCMakeInstance()->GetHomeOutputDirectory());
   WriteCompilers(context);
-  WriteConfigurations(context);
+  WriteConfigurations(context.fc, context.root->GetMakefile());
 
   // Sort targets
-
   WriteTargetDefinitions(context, false);
   WriteAliases(context, false);
   WriteTargetDefinitions(context, true);
@@ -1352,30 +1237,28 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteRootBFF(
 }
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WritePlaceholders(
-  GenerationContext& context)
+  FileContext& fileContext)
 {
   // Define some placeholder
-  context.fc.WriteSectionHeader("Helper variables");
+  fileContext.WriteSectionHeader("Helper variables");
 
-  context.fc.WriteVariable("FB_INPUT_1_PLACEHOLDER", Quote("\"%1\""));
-  context.fc.WriteVariable("FB_INPUT_2_PLACEHOLDER", Quote("\"%2\""));
+  fileContext.WriteVariable("FB_INPUT_1_PLACEHOLDER", Quote("\"%1\""));
+  fileContext.WriteVariable("FB_INPUT_2_PLACEHOLDER", Quote("\"%2\""));
 }
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WriteSettings(
-  GenerationContext& context)
+  FileContext& fileContext, std::string cacheDir)
 {
-  context.fc.WriteSectionHeader("Settings");
+  fileContext.WriteSectionHeader("Settings");
 
-  context.fc.WriteCommand("Settings");
-  context.fc.WritePushScope();
+  fileContext.WriteCommand("Settings");
+  fileContext.WritePushScope();
 
-  std::string cacheDir =
-    context.self->GetCMakeInstance()->GetHomeOutputDirectory();
   cacheDir += "\\.fbuild.cache";
   cmSystemTools::ConvertToOutputSlashes(cacheDir);
 
-  context.fc.WriteVariable("CachePath", Quote(cacheDir));
-  context.fc.WritePopScope();
+  fileContext.WriteVariable("CachePath", Quote(cacheDir));
+  fileContext.WritePopScope();
 }
 
 bool cmGlobalFastbuildGenerator::Detail::Generation::WriteCompilers(
@@ -1395,7 +1278,7 @@ bool cmGlobalFastbuildGenerator::Detail::Generation::WriteCompilers(
       continue;
     }
 
-    Detection::DetectLanguages(languages, context.self, targetContext.target);
+    Detection::DetectLanguages(languages, targetContext.target);
   }
 
   // Now output a compiler for each of these languages
@@ -1482,398 +1365,31 @@ bool cmGlobalFastbuildGenerator::Detail::Generation::WriteCompilers(
 }
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WriteConfigurations(
-  GenerationContext& context)
+  FileContext& fileContext, cmMakefile* makefile)
 {
-  context.fc.WriteSectionHeader("Configurations");
+  fileContext.WriteSectionHeader("Configurations");
 
-  context.fc.WriteVariable("ConfigBase", "");
-  context.fc.WritePushScopeStruct();
-  context.fc.WritePopScope();
+  fileContext.WriteVariable("ConfigBase", "");
+  fileContext.WritePushScopeStruct();
+  fileContext.WritePopScope();
 
   // Iterate over all configurations and define them:
   std::vector<std::string> configs;
-  context.root->GetMakefile()->GetConfigurations(configs, false);
+  makefile->GetConfigurations(configs, false);
   for (std::vector<std::string>::const_iterator iter = configs.begin();
        iter != configs.end(); ++iter) {
     const std::string& configName = *iter;
-    context.fc.WriteVariable("config_" + configName, "");
-    context.fc.WritePushScopeStruct();
+    fileContext.WriteVariable("config_" + configName, "");
+    fileContext.WritePushScopeStruct();
 
     // Using base config
-    context.fc.WriteCommand("Using", ".ConfigBase");
+    fileContext.WriteCommand("Using", ".ConfigBase");
 
-    context.fc.WritePopScope();
+    fileContext.WritePopScope();
   }
 
   // Write out a list of all configs
-  context.fc.WriteArray("all_configs", Wrap(configs, ".config_", ""));
-}
-
-void cmGlobalFastbuildGenerator::Detail::Generation::WriteCustomCommand(
-  GenerationContext& context, const cmCustomCommand* cc,
-  cmLocalCommonGenerator* lg, const std::string& configName,
-  std::string& targetName, const std::string& hostTargetName)
-{
-  cmMakefile* makefile = lg->GetMakefile();
-
-  // We need to generate the command for execution.
-  cmCustomCommandGenerator ccg(*cc, configName, lg);
-
-  const std::vector<std::string>& outputs = ccg.GetOutputs();
-  const std::vector<std::string>& byproducts = ccg.GetByproducts();
-  std::vector<std::string> mergedOutputs;
-  mergedOutputs.insert(mergedOutputs.end(), outputs.begin(), outputs.end());
-  mergedOutputs.insert(mergedOutputs.end(), byproducts.begin(),
-                       byproducts.end());
-
-  // TODO: Double check that none of the outputs are 'symbolic'
-  // In which case, FASTBuild won't want them treated as
-  // outputs.
-  {
-    // Loop through all outputs, and attempt to find it in the
-    // source files.
-    for (size_t index = 0; index < mergedOutputs.size(); ++index) {
-      const std::string& outputName = mergedOutputs[index];
-
-      cmSourceFile* outputSourceFile = makefile->GetSource(outputName);
-      // Check if this file is symbolic
-      if (outputSourceFile &&
-          outputSourceFile->GetPropertyAsBool("SYMBOLIC")) {
-        // We need to remove this file from the list of outputs
-        // Swap with back and pop
-        mergedOutputs[index] = mergedOutputs.back();
-        mergedOutputs.pop_back();
-      }
-    }
-  }
-
-  std::vector<std::string> inputs;
-  std::vector<std::string> orderDependencies;
-
-  // If this exec node always generates outputs,
-  // then we need to make sure we don't define outputs multiple times.
-  // but if the command should always run (i.e. post builds etc)
-  // then we will output a new one.
-  if (!mergedOutputs.empty()) {
-    // Check if this custom command has already been output.
-    // If it has then just drop an alias here to the original
-    CustomCommandAliasMap::iterator findResult =
-      context.customCommandAliases.find(cc);
-    if (findResult != context.customCommandAliases.end()) {
-      const std::set<std::string>& aliases = findResult->second;
-      if (aliases.find(targetName) != aliases.end()) {
-        // This target has already been generated
-        // with the correct name somewhere else.
-        return;
-      }
-      if (!Detection::isConfigDependant(&ccg)) {
-        // This command has already been generated.
-        // But under a different name so setup an alias to redirect
-        // No merged outputs, so this command must always be run.
-        // Make it's name unique to its host target
-        targetName += "-";
-        targetName += hostTargetName;
-
-        std::vector<std::string> targets;
-        targets.push_back(*findResult->second.begin());
-
-        context.fc.WriteCommand("Alias", Quote(targetName));
-        context.fc.WritePushScope();
-        {
-          context.fc.WriteArray("Targets", Wrap(targets));
-        }
-        context.fc.WritePopScope();
-        return;
-      }
-    }
-    context.customCommandAliases[cc].insert(targetName);
-  } else {
-    // No merged outputs, so this command must always be run.
-    // Make it's name unique to its host target
-    targetName += "-";
-    targetName += hostTargetName;
-  }
-
-  // Take the dependencies listed and split into targets and files.
-  const std::vector<std::string>& depends = ccg.GetDepends();
-  for (std::vector<std::string>::const_iterator iter = depends.begin();
-       iter != depends.end(); ++iter) {
-    const std::string& dep = *iter;
-
-    bool isTarget = context.self->FindTarget(dep) != NULL;
-    if (isTarget) {
-      orderDependencies.push_back(dep + "-" + configName);
-    } else {
-      inputs.push_back(dep);
-    }
-  }
-
-#ifdef _WIN32
-  const std::string shellExt = ".bat";
-#else
-  const std::string shellExt = ".sh";
-#endif
-
-  std::string workingDirectory = ccg.GetWorkingDirectory();
-  if (workingDirectory.empty()) {
-    workingDirectory = makefile->GetCurrentBinaryDirectory();
-    workingDirectory += "/";
-  }
-
-  std::string scriptFileName(workingDirectory + targetName + ".bat");
-  cmsys::ofstream scriptFile(scriptFileName.c_str());
-
-  for (unsigned i = 0; i != ccg.GetNumberOfCommands(); ++i) {
-    std::string args;
-    ccg.AppendArguments(i, args);
-    cmSystemTools::ReplaceString(args, "$$", "$");
-    cmSystemTools::ReplaceString(args, FASTBUILD_DOLLAR_TAG, "$");
-#ifdef _WIN32
-    // in windows batch, '%' is a special character that needs to be doubled
-    // to be escaped
-    cmSystemTools::ReplaceString(args, "%", "%%");
-#endif
-    Detection::ResolveFastbuildVariables(args, configName);
-
-    std::string command(ccg.GetCommand(i));
-    cmSystemTools::ReplaceString(command, FASTBUILD_DOLLAR_TAG, "$");
-    Detection::ResolveFastbuildVariables(command, configName);
-
-    scriptFile << Quote(command, "\"") << args << std::endl;
-  }
-
-  // Write out an exec command
-  /*
-  Exec(alias); (optional)Alias
-  {
-      .ExecExecutable; Executable to run
-      .ExecInput; Input file to pass to executable
-      .ExecOutput; Output file generated by executable
-      .ExecArguments; (optional)Arguments to pass to executable
-      .ExecWorkingDir; (optional)Working dir to set for executable
-
-      ; Additional options
-      .PreBuildDependencies; (optional)Force targets to be built before this
-  Exec(Rarely needed,
-      ; but useful when Exec relies on externally generated files).
-  }
-  */
-
-  std::for_each(inputs.begin(), inputs.end(),
-                &Detection::UnescapeFastbuildVariables);
-  std::for_each(mergedOutputs.begin(), mergedOutputs.end(),
-                &Detection::UnescapeFastbuildVariables);
-
-  context.fc.WriteCommand("Exec", Quote(targetName));
-  context.fc.WritePushScope();
-  {
-#ifdef _WIN32
-    context.fc.WriteVariable("ExecExecutable",
-                             Quote(cmSystemTools::FindProgram("cmd.exe")));
-    context.fc.WriteVariable("ExecArguments", Quote("/C " + scriptFileName));
-#else
-    context.fc.WriteVariable("ExecExecutable", Quote(scriptFileName));
-#endif
-    if (!workingDirectory.empty()) {
-      context.fc.WriteVariable("ExecWorkingDir", Quote(workingDirectory));
-    }
-
-    if (inputs.empty()) {
-      // inputs.push_back("dummy-in");
-    }
-    context.fc.WriteArray("ExecInput", Wrap(inputs));
-
-    if (mergedOutputs.empty()) {
-      context.fc.WriteVariable("ExecUseStdOutAsOutput", "true");
-
-      std::string outputDir = lg->GetMakefile()->GetHomeOutputDirectory();
-      mergedOutputs.push_back(outputDir + "/dummy-out-" + targetName + ".txt");
-    }
-    // Currently fastbuild doesn't support more than 1
-    // output for a custom command (soon to change hopefully).
-    // so only use the first one
-    context.fc.WriteVariable("ExecOutput", Quote(mergedOutputs[0]));
-  }
-  context.fc.WritePopScope();
-}
-
-void cmGlobalFastbuildGenerator::Detail::Generation::WriteCustomBuildSteps(
-  GenerationContext& context, cmLocalCommonGenerator* lg,
-  const cmGeneratorTarget* generatorTarget,
-  const std::vector<cmCustomCommand>& commands, const std::string& buildStep,
-  const std::vector<std::string>& orderDeps)
-{
-  if (commands.empty()) {
-    return;
-  }
-
-  const std::string& targetName = generatorTarget->GetName();
-
-  // Now output the commands
-  std::vector<std::string> configs;
-  context.root->GetMakefile()->GetConfigurations(configs, false);
-  for (std::vector<std::string>::const_iterator iter = configs.begin();
-       iter != configs.end(); ++iter) {
-    const std::string& configName = *iter;
-
-    context.fc.WriteVariable("buildStep_" + buildStep + "_" + configName, "");
-    context.fc.WritePushScopeStruct();
-
-    context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
-
-    context.fc.WriteArray("PreBuildDependencies",
-                          Wrap(orderDeps, "'", "-" + configName + "'"), "+");
-
-    std::string baseName = targetName + "-" + buildStep + "-" + configName;
-    int commandCount = 1;
-    std::vector<std::string> customCommandTargets;
-    for (std::vector<cmCustomCommand>::const_iterator ccIter =
-           commands.begin();
-         ccIter != commands.end(); ++ccIter) {
-      const cmCustomCommand& cc = *ccIter;
-
-      std::stringstream customCommandTargetName;
-      customCommandTargetName << baseName << (commandCount++);
-
-      std::string customCommandTargetNameStr = customCommandTargetName.str();
-      WriteCustomCommand(context, &cc, lg, configName,
-                         customCommandTargetNameStr, targetName);
-      customCommandTargets.push_back(customCommandTargetNameStr);
-    }
-
-    // Write an alias for this object group to group them all together
-    context.fc.WriteCommand("Alias", Quote(baseName));
-    context.fc.WritePushScope();
-    context.fc.WriteArray("Targets", Wrap(customCommandTargets, "'", "'"));
-    context.fc.WritePopScope();
-
-    context.fc.WritePopScope();
-  }
-}
-
-bool cmGlobalFastbuildGenerator::Detail::Generation::WriteCustomBuildRules(
-  GenerationContext& context, cmLocalCommonGenerator* lg,
-  const cmGeneratorTarget* gt)
-{
-  bool hasCustomCommands = false;
-  const std::string& targetName = gt->GetName();
-
-  // Iterating over all configurations
-  std::vector<std::string> configs;
-  context.root->GetMakefile()->GetConfigurations(configs, false);
-  for (std::vector<std::string>::const_iterator iter = configs.begin();
-       iter != configs.end(); ++iter) {
-    std::string configName = *iter;
-
-    context.fc.WriteVariable("CustomCommands_" + configName, "");
-    context.fc.WritePushScopeStruct();
-
-    context.fc.WriteCommand("Using", ".BaseConfig_" + configName);
-
-    // Figure out the list of custom build rules in use by this target
-    // get a list of source files
-    std::vector<cmSourceFile const*> customCommands;
-    gt->GetCustomCommands(customCommands, configName);
-
-    if (!customCommands.empty()) {
-      // Presort the commands to adjust for dependencies
-      // In a number of cases, the commands inputs will be the outputs
-      // from another command. Need to sort the commands to output them in
-      // order.
-      Detection::DependencySorter::CustomCommandHelper ccHelper = {
-        context.self, lg, configName
-      };
-      Detection::DependencySorter::Sort(ccHelper, customCommands);
-
-      std::vector<std::string> customCommandTargets;
-
-      // Write the custom command build rules for each configuration
-      int commandCount = 1;
-      std::string customCommandNameBase = "CustomCommand-" + configName + "-";
-      for (std::vector<cmSourceFile const*>::iterator ccIter =
-             customCommands.begin();
-           ccIter != customCommands.end(); ++ccIter) {
-        const cmSourceFile* sourceFile = *ccIter;
-
-        std::stringstream customCommandTargetName;
-        customCommandTargetName << customCommandNameBase << (commandCount++);
-        customCommandTargetName
-          << "-" << cmSystemTools::GetFilenameName(sourceFile->GetFullPath());
-        ;
-
-        std::string customCommandTargetNameStr = customCommandTargetName.str();
-        WriteCustomCommand(context, sourceFile->GetCustomCommand(), lg,
-                           configName, customCommandTargetNameStr, targetName);
-
-        customCommandTargets.push_back(customCommandTargetNameStr);
-      }
-
-      std::string customCommandGroupName =
-        targetName + "-CustomCommands-" + configName;
-
-      // Write an alias for this object group to group them all together
-      context.fc.WriteCommand("Alias", Quote(customCommandGroupName));
-      context.fc.WritePushScope();
-      context.fc.WriteArray("Targets", Wrap(customCommandTargets, "'", "'"));
-      context.fc.WritePopScope();
-
-      // Now make everything use this as prebuilt dependencies
-      std::vector<std::string> tmp;
-      tmp.push_back(customCommandGroupName);
-      context.fc.WriteArray("PreBuildDependencies", Wrap(tmp), "+");
-
-      hasCustomCommands = true;
-    }
-
-    context.fc.WritePopScope();
-  }
-
-  return hasCustomCommands;
-}
-
-void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetAliases(
-  GenerationContext& context, const cmGeneratorTarget* generatorTarget,
-  const std::vector<std::string>& linkableDeps,
-  const std::vector<std::string>& orderDeps)
-{
-  const std::string& targetName = generatorTarget->GetName();
-
-  std::vector<std::string> configs;
-  context.root->GetMakefile()->GetConfigurations(configs, false);
-  for (std::vector<std::string>::const_iterator iter = configs.begin();
-       iter != configs.end(); ++iter) {
-    const std::string& configName = *iter;
-
-    if (!linkableDeps.empty()) {
-      context.fc.WriteCommand(
-        "Alias", Quote(targetName + "-" + configName + "-products"));
-      context.fc.WritePushScope();
-      context.fc.WriteArray(
-        "Targets",
-        Wrap(linkableDeps, "'" + targetName + "-", "-" + configName + "'"));
-      context.fc.WritePopScope();
-    }
-
-    if (!orderDeps.empty() || !linkableDeps.empty()) {
-      context.fc.WriteCommand("Alias", Quote(targetName + "-" + configName));
-      context.fc.WritePushScope();
-      context.fc.WriteArray(
-        "Targets",
-        Wrap(linkableDeps, "'" + targetName + "-", "-" + configName + "'"));
-      context.fc.WriteArray(
-        "Targets",
-        Wrap(orderDeps, "'" + targetName + "-", "-" + configName + "'"), "+");
-      context.fc.WritePopScope();
-    }
-  }
-}
-
-void cmGlobalFastbuildGenerator::Detail::Generation::
-  WriteTargetUtilityDefinition(GenerationContext& context,
-                               cmLocalCommonGenerator* lg,
-                               const cmGeneratorTarget* generatorTarget)
-{
-  WriteTargetDefinition(context, lg, generatorTarget);
+  fileContext.WriteArray("all_configs", Wrap(configs, ".config_", ""));
 }
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
@@ -1913,15 +1429,14 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
       case cmState::STATIC_LIBRARY:
       case cmState::MODULE_LIBRARY:
       case cmState::OBJECT_LIBRARY: {
-        cmFastbuildNormalTargetGenerator targetGenerator(target, context);
+        cmFastbuildNormalTargetGenerator targetGenerator(
+          target, context.customCommandAliases);
         targetGenerator.Generate();
-
-        WriteTargetDefinition(context, lg, constTarget);
         break;
       }
       case cmState::UTILITY:
       case cmState::GLOBAL_TARGET:
-        WriteTargetUtilityDefinition(context, lg, constTarget);
+        // TODO stuff ?
         break;
       default:
         break;
