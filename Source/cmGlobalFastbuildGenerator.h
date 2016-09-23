@@ -69,6 +69,13 @@ public:
 
   static bool SupportsToolset() { return false; }
 
+  static std::string Quote(const std::string& str,
+                           const std::string& quotation = "'");
+
+  static std::vector<std::string> Wrap(const std::vector<std::string>& in,
+                                       const std::string& prefix = "'",
+                                       const std::string& suffix = "'");
+
   class Detail
   {
   public:
@@ -98,74 +105,10 @@ public:
       std::string linePrefix;
       std::string closingScope;
     };
-    class Definition;
     class Detection
     {
     public:
-      static std::string GetLastFolderName(const std::string& string);
-
       static bool IsExcludedFromAll(cmGeneratorTarget* target);
-
-      static void UnescapeFastbuildVariables(std::string& string);
-
-      static void ResolveFastbuildVariables(std::string& string,
-                                            const std::string& configName);
-
-      static std::string BuildCommandLine(
-        const std::vector<std::string>& cmdLines);
-
-      static void DetectConfigurations(
-        cmGlobalFastbuildGenerator* self, cmMakefile* mf,
-        std::vector<std::string>& configurations);
-
-      struct FastbuildTargetNames
-      {
-        std::string targetNameOut;
-        std::string targetNameReal;
-        std::string targetNameImport;
-        std::string targetNamePDB;
-        std::string targetNameSO;
-
-        std::string targetOutput;
-        std::string targetOutputReal;
-        std::string targetOutputImplib;
-        std::string targetOutputDir;
-        std::string targetOutputPDBDir;
-        std::string targetOutputCompilePDBDir;
-      };
-
-      static void DetectOutput(cmLocalCommonGenerator* lg,
-                               FastbuildTargetNames& targetNamesOut,
-                               const cmGeneratorTarget* generatorTarget,
-                               const std::string& configName);
-
-      static void ComputeLinkCmds(std::vector<std::string>& linkCmds,
-                                  cmLocalCommonGenerator* lg,
-                                  const cmGeneratorTarget* gt,
-                                  std::string configName);
-
-      static std::string ComputeDefines(
-        cmLocalCommonGenerator* lg, const cmGeneratorTarget* generatorTarget,
-        const cmSourceFile* source, const std::string& configName,
-        const std::string& language);
-
-      static void DetectLinkerLibPaths(
-        std::string& linkerLibPath, cmLocalCommonGenerator* lg,
-        const cmGeneratorTarget* generatorTarget,
-        const std::string& configName);
-
-      static bool DetectBaseLinkerCommand(std::string& command,
-                                          cmLocalFastbuildGenerator* lg,
-                                          const cmGeneratorTarget* gt,
-                                          const std::string& configName);
-
-      static void SplitExecutableAndFlags(const std::string& command,
-                                          std::string& executable,
-                                          std::string& options);
-
-      static void DetectBaseCompileCommand(
-        std::string& command, cmLocalFastbuildGenerator* lg,
-        const cmGeneratorTarget* generatorTarget, const std::string& language);
 
       static void DetectLanguages(std::set<std::string>& languages,
                                   const cmGeneratorTarget* generatorTarget);
@@ -181,18 +124,6 @@ public:
                                       const cmSourceFile* source,
                                       const std::string& language,
                                       const std::string& configName);
-
-      static void DetectTargetLinkDependencies(
-        const cmGeneratorTarget* generatorTarget,
-        const std::string& configName, std::vector<std::string>& dependencies);
-
-      static std::string DetectTargetCompileOutputDir(
-        cmLocalCommonGenerator* lg, const cmGeneratorTarget* generatorTarget,
-        std::string configName);
-
-      static void DetectTargetObjectDependencies(
-        cmGlobalCommonGenerator* gg, const cmGeneratorTarget* gt,
-        const std::string& configName, std::vector<std::string>& dependencies);
 
       struct DependencySorter
       {
@@ -337,8 +268,6 @@ public:
 
       static void StripNestedGlobalTargets(OrderedTargetSet& orderedTargets);
 
-      static bool isConfigDependant(const cmCustomCommandGenerator* ccg);
-
       static void DetectCompilerExtraFiles(
         const std::string& compilerID, const std::string& version,
         std::vector<std::string>& extraFiles);
@@ -347,15 +276,7 @@ public:
     class Generation
     {
     public:
-      struct TargetGenerationContext
-      {
-        cmGeneratorTarget* target;
-        cmLocalCommonGenerator* root;
-        std::vector<cmLocalGenerator*> generators;
-        cmLocalCommonGenerator* lg;
-      };
-      typedef std::map<const cmGeneratorTarget*, TargetGenerationContext>
-        TargetContextMap;
+      typedef std::set<cmGeneratorTarget*> TargetContextList;
       typedef std::map<const cmCustomCommand*, std::set<std::string> >
         CustomCommandAliasMap;
       typedef Detection::OrderedTargetSet OrderedTargets;
@@ -374,12 +295,9 @@ public:
         cmLocalCommonGenerator* root;
         FileContext& fc;
         OrderedTargets orderedTargets;
-        TargetContextMap targetContexts;
+        TargetContextList targetContexts;
         CustomCommandAliasMap customCommandAliases;
       };
-
-      static std::string Quote(const std::string& str,
-                               const std::string& quotation = "'");
 
       static std::string Join(const std::vector<std::string>& elems,
                               const std::string& delim);
@@ -395,14 +313,10 @@ public:
         }
       };
 
-      static std::vector<std::string> Wrap(const std::vector<std::string>& in,
-                                           const std::string& prefix = "'",
-                                           const std::string& suffix = "'");
-
       static std::string EncodeLiteral(const std::string& lit);
 
       static void BuildTargetContexts(cmGlobalFastbuildGenerator* gg,
-                                      TargetContextMap& map);
+                                      TargetContextList& map);
 
       static void GenerateRootBFF(cmGlobalFastbuildGenerator* self);
 
