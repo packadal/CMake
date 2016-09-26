@@ -167,6 +167,57 @@ The following tests FAILED:
         398 - CMake.CheckSourceTree (Failed)
 Errors while running CTest
 
+================ 3.6 ===========================
+90% tests passed, 40 tests failed out of 400
+
+Label Time Summary:
+Label1    =   0.66 sec (1 test)
+Label2    =   0.66 sec (1 test)
+
+Total Test time (real) = 575.97 sec
+
+The following tests FAILED:
+         37 - MSManifest (Failed)
+         46 - ObjectLibrary (Failed)
+         52 - LinkDirectory (Failed)
+         61 - Preprocess (Failed)
+         62 - ExportImport (Failed)
+         69 - AliasTarget (Failed)
+         70 - StagingPrefix (Failed)
+         71 - InterfaceLibrary (Failed)
+         75 - BundleUtilities (Failed)
+         79 - Module.ExternalData (Failed)
+        102 - SubProject-Stage2 (Failed)
+        104 - TargetName (Failed)
+        108 - GeneratorExpression (Failed)
+        109 - CustomCommand (Failed)
+        110 - CustomCommandByproducts (Failed)
+        112 - CustomCommandWorkingDirectory (Failed)
+        114 - BuildDepends (Failed)
+        115 - SimpleInstall (Failed)
+        116 - SimpleInstall-Stage2 (Failed)
+        128 - complex (Failed)
+        129 - complexOneConfig (Failed)
+        132 - ExternalProject (Failed)
+        133 - ExternalProjectSubdir (Failed)
+        134 - ExternalProjectLocal (Failed)
+        135 - ExternalProjectUpdateSetup (Failed)
+        136 - ExternalProjectUpdate (Failed)
+        153 - Plugin (SEGFAULT)
+        158 - PDBDirectoryAndName (Failed)
+        162 - MFC (Failed)
+        194 - CMakeCommands.target_link_libraries (Failed)
+        275 - RunCMake.CMP0060 (Failed)
+        277 - RunCMake.CMP0065 (Failed)
+        280 - RunCMake.BuildDepends (Failed)
+        282 - RunCMake.Configure (Failed)
+        287 - RunCMake.GeneratorExpression (Failed)
+        301 - RunCMake.CompileFeatures (Failed)
+        362 - RunCMake.ExternalProject (Failed)
+        367 - RunCMake.CrosscompilingEmulator (Failed)
+        369 - RunCMake.AutoExportDll (Failed)
+        400 - CMake.CheckSourceTree (Failed)
+
 ============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"
 
@@ -294,23 +345,6 @@ void cmGlobalFastbuildGenerator::Detail::FileContext::WriteArray(
 }
 
 //----------------------------------------------------------------------------
-bool cmGlobalFastbuildGenerator::Detail::Detection::IsExcludedFromAll(
-  cmGeneratorTarget* target)
-{
-  bool excluded = target->GetPropertyAsBool("EXCLUDE_FROM_ALL");
-  // FIXME
-  //        cmLocalGenerator* lg =
-  //        target->GetMakefile()->GetLocalGenerator();
-  //        while(lg->GetParent() != 0 && !excluded)
-  //        {
-  //            excluded =
-  //            lg->GetMakefile()->GetPropertyAsBool("EXCLUDE_FROM_ALL");
-  //            lg = lg->GetParent();
-  //        }
-
-  return excluded;
-}
-
 void cmGlobalFastbuildGenerator::Detail::Detection::DetectLanguages(
   std::set<std::string>& languages, const cmGeneratorTarget* generatorTarget)
 {
@@ -679,9 +713,9 @@ void cmGlobalFastbuildGenerator::Detail::Generation::GenerateRootBFF(
 
   // Sort targets
   WriteTargetDefinitions(context, false);
-  WriteAliases(context, false);
+  WriteAliases(context, self, false);
   WriteTargetDefinitions(context, true);
-  WriteAliases(context, true);
+  WriteAliases(context, self, true);
 
   self->g_fc.close();
   self->FileReplacedDuringGenerate(fname);
@@ -894,7 +928,8 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
 }
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
-  GenerationContext& context, bool outputGlobals)
+  GenerationContext& context, cmGlobalFastbuildGenerator* gg,
+  bool outputGlobals)
 {
   context.fc.WriteSectionHeader("Aliases");
 
@@ -940,8 +975,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
       std::string aliasName = targetName + "-" + configName;
 
       perTarget[targetName].push_back(aliasName);
-
-      if (!Detection::IsExcludedFromAll(target)) {
+      if (!gg->IsExcluded(context.root, target)) {
         perConfig[configName].push_back(aliasName);
       }
     }
