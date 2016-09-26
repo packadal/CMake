@@ -81,142 +81,37 @@ The following tests FAILED:
 ================ 3.3 ===========================
 97% tests passed, 11 tests failed out of 381
 
-Label Time Summary:
-Label1    =   1.49 sec (1 test)
-Label2    =   1.49 sec (1 test)
-
-Total Test time (real) = 1144.83 sec
-
-The following tests FAILED:
-         58 - Preprocess (Failed)
-         76 - Module.ExternalData (Failed)
-        111 - BuildDepends (Failed)
-        112 - SimpleInstall (Failed)
-        113 - SimpleInstall-Stage2 (Failed)
-        131 - ExternalProjectLocal (Failed)
-        133 - ExternalProjectUpdate (Failed)
+Regressions:
         274 - RunCMake.CMP0060 (Failed)
-        278 - RunCMake.Configure (Failed)
         294 - RunCMake.VisibilityPreset (Failed)
-        381 - CMake.CheckSourceTree (Failed)
-Errors while running CTest
-
 ================ 3.4 ===========================
 95% tests passed, 19 tests failed out of 397
 
-Label Time Summary:
-Label1    =   0.88 sec (1 test)
-Label2    =   0.88 sec (1 test)
-
-Total Test time (real) = 610.23 sec
-
-The following tests FAILED:
-         37 - MSManifest (Failed)
-         61 - Preprocess (Failed)
-         62 - ExportImport (Failed)
-         79 - Module.ExternalData (Failed)
-        114 - BuildDepends (Failed)
-        115 - SimpleInstall (Failed)
-        116 - SimpleInstall-Stage2 (Failed)
+Regressions:
         132 - ExternalProject (Failed)
-        134 - ExternalProjectLocal (Failed)
-        136 - ExternalProjectUpdate (Failed)
-        156 - SubDir (Failed)
         158 - PDBDirectoryAndName (Failed)
         226 - InterfaceLinkLibraries (Failed)
-        275 - RunCMake.CMP0060 (Failed)
         280 - RunCMake.BuildDepends (Failed)
-        282 - RunCMake.Configure (Failed)
-        303 - RunCMake.VisibilityPreset (Failed)
         366 - RunCMake.AutoExportDll (Failed)
-        397 - CMake.CheckSourceTree (Failed)
-Errors while running CTest
 
 ================ 3.5 ===========================
 94% tests passed, 23 tests failed out of 398
 
-Label Time Summary:
-Label1    =   0.91 sec (1 test)
-Label2    =   0.91 sec (1 test)
-
-Total Test time (real) = 630.50 sec
-
-The following tests FAILED:
-         37 - MSManifest (Failed)
+Regressions:
          41 - COnly (Failed)
          46 - ObjectLibrary (Failed)
-         61 - Preprocess (Failed)
-         62 - ExportImport (Failed)
-         79 - Module.ExternalData (Failed)
         109 - CustomCommand (Failed)
-        114 - BuildDepends (Failed)
-        115 - SimpleInstall (Failed)
-        116 - SimpleInstall-Stage2 (Failed)
-        132 - ExternalProject (Failed)
-        134 - ExternalProjectLocal (Failed)
         153 - Plugin (SEGFAULT)
-        156 - SubDir (Failed)
         194 - CMakeCommands.target_link_libraries (Failed)
         225 - IncludeDirectories (Failed)
-        275 - RunCMake.CMP0060 (Failed)
         277 - RunCMake.CMP0065 (Failed)
-        280 - RunCMake.BuildDepends (Failed)
-        282 - RunCMake.Configure (Failed)
         360 - RunCMake.ExternalProject (Failed)
-        367 - RunCMake.AutoExportDll (Failed)
-        398 - CMake.CheckSourceTree (Failed)
 Errors while running CTest
 
 ================ 3.6 ===========================
-90% tests passed, 40 tests failed out of 400
-
-Label Time Summary:
-Label1    =   0.66 sec (1 test)
-Label2    =   0.66 sec (1 test)
-
-Total Test time (real) = 575.97 sec
-
-The following tests FAILED:
-         37 - MSManifest (Failed)
-         46 - ObjectLibrary (Failed)
-         52 - LinkDirectory (Failed)
-         61 - Preprocess (Failed)
-         62 - ExportImport (Failed)
-         69 - AliasTarget (Failed)
-         70 - StagingPrefix (Failed)
-         71 - InterfaceLibrary (Failed)
+95% tests passed, 22 tests failed out of 400
+Regressions:
          75 - BundleUtilities (Failed)
-         79 - Module.ExternalData (Failed)
-        102 - SubProject-Stage2 (Failed)
-        104 - TargetName (Failed)
-        108 - GeneratorExpression (Failed)
-        109 - CustomCommand (Failed)
-        110 - CustomCommandByproducts (Failed)
-        112 - CustomCommandWorkingDirectory (Failed)
-        114 - BuildDepends (Failed)
-        115 - SimpleInstall (Failed)
-        116 - SimpleInstall-Stage2 (Failed)
-        128 - complex (Failed)
-        129 - complexOneConfig (Failed)
-        132 - ExternalProject (Failed)
-        133 - ExternalProjectSubdir (Failed)
-        134 - ExternalProjectLocal (Failed)
-        135 - ExternalProjectUpdateSetup (Failed)
-        136 - ExternalProjectUpdate (Failed)
-        153 - Plugin (SEGFAULT)
-        158 - PDBDirectoryAndName (Failed)
-        162 - MFC (Failed)
-        194 - CMakeCommands.target_link_libraries (Failed)
-        275 - RunCMake.CMP0060 (Failed)
-        277 - RunCMake.CMP0065 (Failed)
-        280 - RunCMake.BuildDepends (Failed)
-        282 - RunCMake.Configure (Failed)
-        287 - RunCMake.GeneratorExpression (Failed)
-        301 - RunCMake.CompileFeatures (Failed)
-        362 - RunCMake.ExternalProject (Failed)
-        367 - RunCMake.CrosscompilingEmulator (Failed)
-        369 - RunCMake.AutoExportDll (Failed)
-        400 - CMake.CheckSourceTree (Failed)
 
 ============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"
@@ -495,15 +390,14 @@ void cmGlobalFastbuildGenerator::Detail::Detection::DependencySorter::
   }
 }
 
-void cmGlobalFastbuildGenerator::Detail::Detection::
-  ComputeTargetOrderAndDependencies(cmGlobalFastbuildGenerator* gg,
-                                    OrderedTargetSet& orderedTargets)
+void cmGlobalFastbuildGenerator::ComputeTargetOrderAndDependencies(
+  Detail::Detection::OrderedTargetSet& orderedTargets)
 {
   TargetDependSet projectTargets;
   TargetDependSet originalTargets;
   std::map<std::string, std::vector<cmLocalGenerator *> >::const_iterator
-    it = gg->GetProjectMap().begin(),
-    end = gg->GetProjectMap().end();
+    it = this->GetProjectMap().begin(),
+    end = this->GetProjectMap().end();
   for (; it != end; ++it) {
     const std::vector<cmLocalGenerator*>& generators = it->second;
     cmLocalFastbuildGenerator* root =
@@ -513,7 +407,7 @@ void cmGlobalFastbuildGenerator::Detail::Detection::
     // Collect all targets under this root generator and the transitive
     // closure of their dependencies.
 
-    gg->GetTargetSets(projectTargets, originalTargets, root, generators);
+    this->GetTargetSets(projectTargets, originalTargets, root, generators);
   }
 
   // Iterate over the targets and export their order
@@ -525,8 +419,9 @@ void cmGlobalFastbuildGenerator::Detail::Detection::
     orderedTargets.push_back(target);
   }
 
-  DependencySorter::TargetHelper targetHelper = { gg };
-  DependencySorter::Sort(targetHelper, orderedTargets);
+  Detail::Detection::DependencySorter::TargetHelper targetHelper = { this };
+  Detail::Detection::DependencySorter::Sort(targetHelper, orderedTargets);
+  Detail::Detection::StripNestedGlobalTargets(orderedTargets);
 }
 
 // Iterate over all targets and remove the ones that are
@@ -665,8 +560,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::BuildTargetContexts(
     for (std::vector<cmLocalGenerator*>::const_iterator iter =
            generators.begin();
          iter != generators.end(); ++iter) {
-      cmLocalFastbuildGenerator* lg =
-        static_cast<cmLocalFastbuildGenerator*>(*iter);
+      cmLocalGenerator* lg = *iter;
 
       if (gg->IsExcluded(root, lg)) {
         continue;
@@ -699,8 +593,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::GenerateRootBFF(
 
   self->g_fc.setFileName(fname);
   GenerationContext context(root, self->g_fc);
-  Detection::ComputeTargetOrderAndDependencies(self, context.orderedTargets);
-  Detection::StripNestedGlobalTargets(context.orderedTargets);
+  self->ComputeTargetOrderAndDependencies(context.orderedTargets);
   BuildTargetContexts(self, context.targetContexts);
   // write root bff
   self->g_fc.WriteSectionHeader("Fastbuild makefile - Generated using CMAKE");
@@ -889,6 +782,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
     if (constTarget->GetType() == cmState::INTERFACE_LIBRARY) {
       continue;
     }
+    // FIXME const cast are evil
     cmGeneratorTarget* target = (cmGeneratorTarget*)constTarget;
 
     if (target->GetType() == cmState::GLOBAL_TARGET) {
@@ -904,15 +798,16 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
       case cmState::SHARED_LIBRARY:
       case cmState::STATIC_LIBRARY:
       case cmState::MODULE_LIBRARY:
-      case cmState::OBJECT_LIBRARY: {
+      case cmState::OBJECT_LIBRARY:
+      // TODO should utility target be treated differently ?
+      case cmState::UTILITY:
+      case cmState::GLOBAL_TARGET: {
         cmFastbuildNormalTargetGenerator targetGenerator(target);
         targetGenerator.Generate();
         break;
       }
-      case cmState::UTILITY:
-      case cmState::GLOBAL_TARGET:
-        // TODO stuff ?
-        break;
+
+      break;
       default:
         break;
     }
@@ -941,6 +836,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
       continue;
     }
 
+    // FIXME const cast are evil
     TargetContextList::iterator findResult =
       context.targetContexts.find((cmGeneratorTarget*)constTarget);
     if (findResult == context.targetContexts.end()) {
@@ -1177,13 +1073,6 @@ const char* cmGlobalFastbuildGenerator::GetCMakeCFGIntDir() const
 }
 
 //----------------------------------------------------------------------------
-void cmGlobalFastbuildGenerator::GetTargetSets(
-  TargetDependSet& projectTargets, TargetDependSet& originalTargets,
-  cmLocalGenerator* root, GeneratorVector const& gv)
-{
-  cmGlobalGenerator::GetTargetSets(projectTargets, originalTargets, root, gv);
-}
-
 void cmGlobalFastbuildGenerator::GetDocumentation(cmDocumentationEntry& entry)
 {
   entry.Name = cmGlobalFastbuildGenerator::GetActualName();

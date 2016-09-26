@@ -58,10 +58,6 @@ public:
   virtual void ComputeTargetObjectDirectory(cmGeneratorTarget*) const;
   virtual const char* GetCMakeCFGIntDir() const;
 
-  virtual void GetTargetSets(TargetDependSet& projectTargets,
-                             TargetDependSet& originalTargets,
-                             cmLocalGenerator* root, GeneratorVector const&);
-
   static std::string GetActualName() { return "Fastbuild"; }
 
   /// Overloaded methods. @see cmGlobalGenerator::GetDocumentation()
@@ -253,8 +249,6 @@ public:
       };
 
       typedef std::vector<const cmGeneratorTarget*> OrderedTargetSet;
-      static void ComputeTargetOrderAndDependencies(
-        cmGlobalFastbuildGenerator* gg, OrderedTargetSet& orderedTargets);
 
       // Iterate over all targets and remove the ones that are
       // not needed for generation.
@@ -314,8 +308,6 @@ public:
 
       static void GenerateRootBFF(cmGlobalFastbuildGenerator* self);
 
-      static void WriteRootBFF(GenerationContext& context);
-
       static void WritePlaceholders(FileContext& fileContext);
 
       static void WriteSettings(FileContext& fileContext,
@@ -349,6 +341,9 @@ public:
                                bool outputGlobals);
     };
   };
+
+  void ComputeTargetOrderAndDependencies(
+    Detail::Detection::OrderedTargetSet& orderedTargets);
 
   Detail::FileContext g_fc;
 
