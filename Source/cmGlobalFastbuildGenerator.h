@@ -291,7 +291,6 @@ public:
         FileContext& fc;
         OrderedTargets orderedTargets;
         TargetContextList targetContexts;
-        CustomCommandAliasMap customCommandAliases;
       };
 
       static std::string Join(const std::vector<std::string>& elems,

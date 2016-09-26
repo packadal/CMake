@@ -889,14 +889,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
     if (constTarget->GetType() == cmState::INTERFACE_LIBRARY) {
       continue;
     }
-
-    TargetContextList::iterator findResult =
-      context.targetContexts.find((cmGeneratorTarget*)constTarget);
-    if (findResult == context.targetContexts.end()) {
-      continue;
-    }
-
-    cmGeneratorTarget* target = *findResult;
+    cmGeneratorTarget* target = (cmGeneratorTarget*)constTarget;
 
     if (target->GetType() == cmState::GLOBAL_TARGET) {
       if (!outputGlobals)
@@ -912,8 +905,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
       case cmState::STATIC_LIBRARY:
       case cmState::MODULE_LIBRARY:
       case cmState::OBJECT_LIBRARY: {
-        cmFastbuildNormalTargetGenerator targetGenerator(
-          target, context.customCommandAliases);
+        cmFastbuildNormalTargetGenerator targetGenerator(target);
         targetGenerator.Generate();
         break;
       }
