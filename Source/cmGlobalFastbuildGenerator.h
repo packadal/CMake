@@ -108,8 +108,6 @@ public:
     class Detection
     {
     public:
-      static bool IsExcludedFromAll(cmGeneratorTarget* target);
-
       static void DetectLanguages(std::set<std::string>& languages,
                                   const cmGeneratorTarget* generatorTarget);
 
@@ -347,7 +345,9 @@ public:
       static void WriteTargetDefinitions(GenerationContext& context,
                                          bool outputGlobals);
 
-      static void WriteAliases(GenerationContext& context, bool outputGlobals);
+      static void WriteAliases(GenerationContext& context,
+                               cmGlobalFastbuildGenerator* gg,
+                               bool outputGlobals);
     };
   };
 
