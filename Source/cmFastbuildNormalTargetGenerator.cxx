@@ -543,10 +543,10 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
 
   cmLocalGenerator::RuleVariables vars;
   vars.RuleLauncher = "RULE_LAUNCH_LINK";
-  // FIXME const cast are evil
-  vars.CMTarget = (cmGeneratorTarget*)GeneratorTarget;
+  vars.CMTarget = GeneratorTarget;
   vars.Language = linkLanguage.c_str();
-  vars.Manifests = "";
+  const std::string manifests = this->GetManifests();
+  vars.Manifests = manifests.c_str();
 
   std::string responseFlag;
   vars.Objects =
@@ -919,7 +919,7 @@ void cmFastbuildNormalTargetGenerator::EnsureDirectoryExists(
 std::string cmFastbuildNormalTargetGenerator::GetLastFolderName(
   const std::string& string)
 {
-  return string.substr(string.rfind('/'));
+  return string.substr(string.rfind('/') + 1);
 }
 
 void cmFastbuildNormalTargetGenerator::ResolveFastbuildVariables(
@@ -1255,11 +1255,11 @@ void cmFastbuildNormalTargetGenerator::Generate()
           configObjectGroups.push_back(ruleName.str());
 
           std::string targetCompileOutDirectory =
-            DetectTargetCompileOutputDir(configName);
+            DetectTargetCompileOutputDir(configName) + "/" + folderName;
+          cmSystemTools::ConvertToOutputSlashes(targetCompileOutDirectory);
           m_fileContext.WriteVariable(
             "CompilerOutputPath",
-            cmGlobalFastbuildGenerator::Quote(targetCompileOutDirectory + "/" +
-                                              folderName));
+            cmGlobalFastbuildGenerator::Quote(targetCompileOutDirectory));
 
           // Unity source files:
           m_fileContext.WriteVariable("UnityInputFiles",
