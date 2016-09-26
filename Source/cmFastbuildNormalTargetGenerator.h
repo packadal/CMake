@@ -7,10 +7,7 @@
 class cmFastbuildNormalTargetGenerator : public cmFastbuildTargetGenerator
 {
 public:
-  cmFastbuildNormalTargetGenerator(
-    cmGeneratorTarget* gt,
-    cmGlobalFastbuildGenerator::Detail::Generation::CustomCommandAliasMap
-      customCommandAliases);
+  cmFastbuildNormalTargetGenerator(cmGeneratorTarget* gt);
 
   virtual void Generate();
 
@@ -73,6 +70,8 @@ private:
 
   std::string DetectTargetCompileOutputDir(std::string configName) const;
 
+  cmGlobalFastbuildGenerator::Detail::FileContext& m_fileContext;
+
   static void UnescapeFastbuildVariables(std::string& string);
 
   static bool isConfigDependant(const cmCustomCommandGenerator* ccg);
@@ -92,9 +91,8 @@ private:
   static void ResolveFastbuildVariables(std::string& string,
                                         const std::string& configName);
 
-  cmGlobalFastbuildGenerator::Detail::FileContext& m_fileContext;
-  cmGlobalFastbuildGenerator::Detail::Generation::CustomCommandAliasMap
-    m_customCommandAliases;
+  static cmGlobalFastbuildGenerator::Detail::Generation::CustomCommandAliasMap
+    s_customCommandAliases;
 };
 
 #endif // CMFASTBUILDNORMALTARGETGENERATOR_H
