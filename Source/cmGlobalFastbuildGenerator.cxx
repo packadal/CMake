@@ -14,16 +14,6 @@
     Development progress:
 
     Tasks/Issues:
-     - Execute unit tests against the generator somehow
-     - Fix target aliases being repeated in the output
-     - Fix cmake build using fastbuild (currently appears configuration
-incorrect)
-     - Running some of the Cmake generation, the pdb files can't be deleted
-(shows up errors)
-     - Depends upon visual studio generator code to sort dependencies
-     - When generating CMAKE from scratch, it sometimes errors with fortran
-complaints and fails generation?
-     a re-run will succeed.
      - Linker for msvc uses the cmake command to callback. Don't think this is
 an issue since
      I think compilation is the part that gets distributed anyway.
@@ -65,48 +55,45 @@ cycles would be possible
     Total Test time (real) = 1479.86 sec
 
 The following tests FAILED:
-     59 - Preprocess (Failed)
-     60 - ExportImport (Failed)
-     77 - Module.ExternalData (Failed)
-    108 - CustomCommandByproducts (Failed)
-    112 - BuildDepends (Failed)
-    113 - SimpleInstall (Failed)
-    114 - SimpleInstall-Stage2 (Failed)
-    131 - ExternalProjectLocal (Failed)
-    132 - ExternalProjectUpdateSetup (Failed)
-    133 - ExternalProjectUpdate (Failed)
-    274 - RunCMake.Configure (Failed)
-    370 - CMake.CheckSourceTree (Failed)
+59 - Preprocess (Failed)
+60 - ExportImport (Failed)
+77 - Module.ExternalData (Failed)
+108 - CustomCommandByproducts (Failed)
+112 - BuildDepends (Failed)
+113 - SimpleInstall (Failed)
+114 - SimpleInstall-Stage2 (Failed)
+131 - ExternalProjectLocal (Failed)
+132 - ExternalProjectUpdateSetup (Failed)
+133 - ExternalProjectUpdate (Failed)
+274 - RunCMake.Configure (Failed)
+370 - CMake.CheckSourceTree (Failed)
 
 ================ 3.3 ===========================
 97% tests passed, 11 tests failed out of 381
 
 Regressions:
-        274 - RunCMake.CMP0060 (Failed)
-        294 - RunCMake.VisibilityPreset (Failed)
+274 - RunCMake.CMP0060 (Failed)
+294 - RunCMake.VisibilityPreset (Failed)
 ================ 3.4 ===========================
 95% tests passed, 19 tests failed out of 397
 
 Regressions:
-        132 - ExternalProject (Failed)
-        158 - PDBDirectoryAndName (Failed)
-        226 - InterfaceLinkLibraries (Failed)
-        280 - RunCMake.BuildDepends (Failed)
-        366 - RunCMake.AutoExportDll (Failed)
+132 - ExternalProject (Failed)
+226 - InterfaceLinkLibraries (Failed)
+280 - RunCMake.BuildDepends (Failed)
+366 - RunCMake.AutoExportDll (Failed) -- very specific, auto-generation of .def
+      file
 
 ================ 3.5 ===========================
 94% tests passed, 23 tests failed out of 398
 
 Regressions:
-         41 - COnly (Failed)
-         46 - ObjectLibrary (Failed)
-        109 - CustomCommand (Failed)
-        153 - Plugin (SEGFAULT)
-        194 - CMakeCommands.target_link_libraries (Failed)
-        225 - IncludeDirectories (Failed)
-        277 - RunCMake.CMP0065 (Failed)
-        360 - RunCMake.ExternalProject (Failed)
-Errors while running CTest
+109 - CustomCommand (Failed)
+153 - Plugin (SEGFAULT)
+194 - CMakeCommands.target_link_libraries (Failed)
+225 - IncludeDirectories (Failed)
+277 - RunCMake.CMP0065 (Failed)
+360 - RunCMake.ExternalProject (Failed)
 
 ================ 3.6 ===========================
 95% tests passed, 22 tests failed out of 400
