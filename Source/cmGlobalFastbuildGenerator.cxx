@@ -73,14 +73,19 @@ The following tests FAILED:
 
 Regressions:
 274 - RunCMake.CMP0060 (Failed)
-294 - RunCMake.VisibilityPreset (Failed)
 ================ 3.4 ===========================
 95% tests passed, 19 tests failed out of 397
 
 Regressions:
-132 - ExternalProject (Failed)
-226 - InterfaceLinkLibraries (Failed)
-280 - RunCMake.BuildDepends (Failed)
+280 - RunCMake.BuildDepends (Failed) -- add dependency on the manifest file
+this is the Ninja code that does it
+      std::vector<cmSourceFile const*> manifest_srcs;
+      this->GeneratorTarget->GetManifests(manifest_srcs, configName);
+      for (std::vector<cmSourceFile const*>::iterator mi = manifest_srcs.begin();
+           mi != manifest_srcs.end(); ++mi) {
+        command.sourceFiles[srcFile->GetLocation().GetDirectory()].push_back(
+          sourceFile);
+      }
 366 - RunCMake.AutoExportDll (Failed) -- very specific, auto-generation of .def
       file
 
@@ -90,15 +95,10 @@ Regressions:
 Regressions:
 109 - CustomCommand (Failed)
 153 - Plugin (SEGFAULT)
-194 - CMakeCommands.target_link_libraries (Failed)
-225 - IncludeDirectories (Failed)
 277 - RunCMake.CMP0065 (Failed)
-360 - RunCMake.ExternalProject (Failed)
-
-================ 3.6 ===========================
-95% tests passed, 22 tests failed out of 400
-Regressions:
-         75 - BundleUtilities (Failed)
+debug with the following command:
+G:\cmake\cmake_fbuild_3.6\bin\Debug\cmake.exe "-DCMAKE_MODULE_PATH=G:/cmake/CMake/Tests/RunCMake" "-DRunCMake_GENERATOR=Fastbuild" "-DRunCMake_GENERATOR_PLATFORM=" "-DRunCMake_GENERATOR_TOOLSET=" "-DRunCMak
+e_MAKE_PROGRAM=G:/tools/FBuild.exe" "-DRunCMake_SOURCE_DIR=G:/cmake/CMake/Tests/RunCMake/CMP0065" "-DRunCMake_BINARY_DIR=G:/cmake/cmake_fbuild_3.6/Tests/RunCMake/CMP0065" "-P" "G:/cmake/CMake/Tests/RunCMake/CMP0065/RunCMakeTest.cmake"
 
 ============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"

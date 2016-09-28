@@ -541,6 +541,8 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
     return false;
   }
 
+  this->GeneratorTarget->GetLinkInformation(this->GetConfigName());
+
   cmLocalGenerator::RuleVariables vars;
   vars.RuleLauncher = "RULE_LAUNCH_LINK";
   vars.CMTarget = GeneratorTarget;
@@ -705,7 +707,8 @@ void cmFastbuildNormalTargetGenerator::DetectBaseCompileCommand(
   compileObjectVars.ObjectFileDir = "";
   compileObjectVars.Flags = "";
   compileObjectVars.Includes = "";
-  compileObjectVars.Manifests = "";
+  const std::string manifests = this->GetManifests();
+  compileObjectVars.Manifests = manifests.c_str();
   compileObjectVars.Defines = "";
   compileObjectVars.TargetCompilePDB = FASTBUILD_DOLLAR_TAG
     "TargetOutCompilePDBDir" FASTBUILD_DOLLAR_TAG FASTBUILD_DOLLAR_TAG
