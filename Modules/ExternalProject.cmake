@@ -1221,7 +1221,8 @@ function(_ep_get_build_command name step cmd_var)
         if(CMAKE_CONFIGURATION_TYPES)
           if (CMAKE_CFG_INTDIR AND
               NOT CMAKE_CFG_INTDIR STREQUAL "." AND
-              NOT CMAKE_CFG_INTDIR MATCHES "\\$")
+              NOT CMAKE_CFG_INTDIR MATCHES "\\$" AND
+              NOT CMAKE_CFG_INTDIR MATCHES "FASTBUILD_DOLLAR_TAG")
             # CMake 3.4 and below used the CMAKE_CFG_INTDIR placeholder value
             # provided by multi-configuration generators.  Some projects were
             # taking advantage of that undocumented implementation detail to
