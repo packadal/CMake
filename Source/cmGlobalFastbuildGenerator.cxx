@@ -359,7 +359,6 @@ void cmGlobalFastbuildGenerator::Detail::Detection::DependencySorter::
                                   std::vector<std::string>& outputs)
 {
   const cmCustomCommand* cc = entry->GetCustomCommand();
-  cmMakefile* makefile = lg->GetMakefile();
 
   // We need to generate the command for execution.
   cmCustomCommandGenerator ccg(*cc, configName, lg);
@@ -469,7 +468,7 @@ void cmGlobalFastbuildGenerator::Detail::Detection::DetectCompilerExtraFiles(
   return;
 
   if (compilerID == "MSVC") {
-    if (version.compare(0, 3, "18.") != std::string::npos) {
+    if (static_cast<size_t>(version.compare(0, 3, "18.")) != std::string::npos) {
       // Using vs2013
       const char* vs2013_extraFiles[13] = {
         "$CompilerRoot$\\c1.dll", "$CompilerRoot$\\c1ast.dll",
@@ -486,7 +485,7 @@ void cmGlobalFastbuildGenerator::Detail::Detection::DetectCompilerExtraFiles(
       };
       extraFiles.insert(extraFiles.end(), &vs2013_extraFiles[0],
                         &vs2013_extraFiles[13]);
-    } else if (version.compare(0, 3, "17.") != std::string::npos) {
+    } else if (static_cast<size_t>(version.compare(0, 3, "17.")) != std::string::npos) {
       // Using vs2012
       const char* vs2012_extraFiles[12] = {
         "$CompilerRoot$\\c1.dll", "$CompilerRoot$\\c1ast.dll",
@@ -983,7 +982,7 @@ void cmGlobalFastbuildGenerator::Generate()
 //----------------------------------------------------------------------------
 void cmGlobalFastbuildGenerator::GenerateBuildCommand(
   std::vector<std::string>& makeCommand, const std::string& makeProgram,
-  const std::string& projectName, const std::string& projectDir,
+  const std::string& /* projectName */, const std::string& projectDir,
   const std::string& targetName, const std::string& config, bool /*fast*/,
   bool /*verbose*/, std::vector<std::string> const& /*makeOptions*/)
 {
@@ -1066,8 +1065,6 @@ void cmGlobalFastbuildGenerator::AppendDirectoryForConfig(
 void cmGlobalFastbuildGenerator::ComputeTargetObjectDirectory(
   cmGeneratorTarget* gt) const
 {
-  cmTarget* target = gt->Target;
-
   // Compute full path to object file directory for this target.
   std::string dir;
   dir += gt->Makefile->GetCurrentBinaryDirectory();
