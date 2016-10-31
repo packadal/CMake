@@ -351,7 +351,6 @@ public:
 
 private:
   class Factory;
-  class Detail;
 
   std::vector<std::string> Configurations;
 };

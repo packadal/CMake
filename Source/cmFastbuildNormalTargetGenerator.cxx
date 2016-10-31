@@ -385,7 +385,8 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
       "ExecArguments",
       cmGlobalFastbuildGenerator::Quote("/C " + scriptFileName));
 #else
-    context.fc.WriteVariable("ExecExecutable", Quote(scriptFileName));
+    m_fileContext.WriteVariable(
+      "ExecExecutable", cmGlobalFastbuildGenerator::Quote(scriptFileName));
 #endif
     if (!workingDirectory.empty()) {
       m_fileContext.WriteVariable(
