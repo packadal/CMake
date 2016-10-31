@@ -137,8 +137,8 @@ void cmFastbuildTargetGenerator::WriteCustomBuildSteps(
   }
 }
 
-void cmFastbuildTargetGenerator::AddIncludeFlags(std::string& flags,
-                                                 const std::string& lang)
+void cmFastbuildTargetGenerator::AddIncludeFlags(std::string& /* flags */,
+                                                 const std::string& /* lang */)
 {
 }
 
@@ -390,7 +390,7 @@ void cmFastbuildTargetGenerator::WriteCustomCommand(
       "ExecArguments",
       cmGlobalFastbuildGenerator::Quote("/C " + scriptFileName));
 #else
-    context.fc.WriteVariable("ExecExecutable", Quote(scriptFileName));
+      m_fileContext.WriteVariable("ExecExecutable", cmGlobalFastbuildGenerator::Quote(scriptFileName));
 #endif
     if (!workingDirectory.empty()) {
       m_fileContext.WriteVariable(
