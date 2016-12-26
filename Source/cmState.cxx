@@ -29,6 +29,7 @@ cmState::cmState()
   , MinGWMake(false)
   , NMake(false)
   , MSYSShell(false)
+  , FastbuildMake(false)
 {
   this->CacheManager = new cmCacheManager;
 }
@@ -587,6 +588,16 @@ void cmState::SetMSYSShell(bool mSYSShell)
 bool cmState::UseMSYSShell() const
 {
   return this->MSYSShell;
+}
+
+void cmState::SetFastbuildMake(bool fastbuildMake)
+{
+  this->FastbuildMake = fastbuildMake;
+}
+
+bool cmState::UseFastbuildMake() const
+{
+  return this->FastbuildMake;
 }
 
 unsigned int cmState::GetCacheMajorVersion() const
