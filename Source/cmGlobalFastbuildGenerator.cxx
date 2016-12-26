@@ -114,6 +114,7 @@ e_MAKE_PROGRAM=G:/tools/FBuild.exe" "-DRunCMake_SOURCE_DIR=G:/cmake/CMake/Tests/
 #include "cmMakefile.h"
 #include "cmSourceFile.h"
 #include "cmTarget.h"
+#include "cmState.h"
 #include <assert.h>
 #include <cmsys/Encoding.hxx>
 
@@ -916,6 +917,7 @@ cmGlobalFastbuildGenerator::cmGlobalFastbuildGenerator(cmake* cm)
   cm->GetState()->SetWindowsShell(true);
 #endif
   this->FindMakeProgramFile = "CMakeFastbuildFindMake.cmake";
+  cm->GetState()->SetFastbuildMake(true);
 }
 
 //----------------------------------------------------------------------------
