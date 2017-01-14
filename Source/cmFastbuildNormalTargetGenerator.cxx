@@ -733,6 +733,7 @@ void cmFastbuildNormalTargetGenerator::DetectBaseCompileCommand(
   const std::string manifests = this->GetManifests();
   compileObjectVars.Manifests = manifests.c_str();
   compileObjectVars.Defines = "";
+  compileObjectVars.Includes = "";
   compileObjectVars.TargetCompilePDB = FASTBUILD_DOLLAR_TAG
     "TargetOutCompilePDBDir" FASTBUILD_DOLLAR_TAG FASTBUILD_DOLLAR_TAG
     "TargetNamePDB" FASTBUILD_DOLLAR_TAG;
