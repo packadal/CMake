@@ -70,6 +70,8 @@ private:
 
   std::string DetectTargetCompileOutputDir(std::string configName) const;
 
+  std::string GetManifestsAsFastbuildPath();
+
   cmGlobalFastbuildGenerator::Detail::FileContext& m_fileContext;
 
   static void UnescapeFastbuildVariables(std::string& string);

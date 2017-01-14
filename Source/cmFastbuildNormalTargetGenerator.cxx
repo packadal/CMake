@@ -574,7 +574,7 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   vars.CMTargetType =
     cmState::GetTargetTypeName(this->GeneratorTarget->GetType());
   vars.Language = linkLanguage.c_str();
-  const std::string manifests = this->GetManifests();
+  const std::string manifests = this->GetManifestsAsFastbuildPath();
   vars.Manifests = manifests.c_str();
 
   std::string responseFlag;
@@ -736,7 +736,7 @@ void cmFastbuildNormalTargetGenerator::DetectBaseCompileCommand(
   compileObjectVars.ObjectFileDir = "";
   compileObjectVars.Flags = "";
   compileObjectVars.Includes = "";
-  const std::string manifests = this->GetManifests();
+  const std::string manifests = this->GetManifestsAsFastbuildPath();
   compileObjectVars.Manifests = manifests.c_str();
   compileObjectVars.Defines = "";
   compileObjectVars.Includes = "";
@@ -1501,3 +1501,18 @@ void cmFastbuildNormalTargetGenerator::Generate()
 
   m_fileContext.WritePopScope();
 }
+
+std::string cmFastbuildNormalTargetGenerator::GetManifestsAsFastbuildPath()
+{
+  std::vector<cmSourceFile const*> manifest_srcs;
+  this->GeneratorTarget->GetManifests(manifest_srcs, this->ConfigName);
+
+  std::vector<std::string> manifests;
+  for (std::vector<cmSourceFile const*>::iterator mi = manifest_srcs.begin();
+       mi != manifest_srcs.end(); ++mi) {
+    manifests.push_back(ConvertToFastbuildPath((*mi)->GetFullPath()));
+  }
+
+  return cmJoin(manifests, " ");
+}
+
