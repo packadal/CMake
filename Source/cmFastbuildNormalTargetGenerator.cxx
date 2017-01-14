@@ -586,7 +586,7 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   vars.Target =
     FASTBUILD_DOLLAR_TAG "FB_INPUT_2_PLACEHOLDER" FASTBUILD_DOLLAR_TAG;
 
-  vars.TargetSOName = FASTBUILD_DOLLAR_TAG "TargetOutSO" FASTBUILD_DOLLAR_TAG;
+  vars.TargetSOName = "";
   vars.TargetPDB = FASTBUILD_DOLLAR_TAG
     "TargetOutPDBDir" FASTBUILD_DOLLAR_TAG FASTBUILD_DOLLAR_TAG
     "TargetNamePDB" FASTBUILD_DOLLAR_TAG;
