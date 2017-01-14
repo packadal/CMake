@@ -270,7 +270,8 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
     // Check if this custom command has already been output.
     // If it has then just drop an alias here to the original
     cmGlobalFastbuildGenerator::Detail::Generation::CustomCommandAliasMap::
-      iterator findResult = s_customCommandAliases.find(cc);
+      iterator findResult =
+        s_customCommandAliases.find(std::make_pair(cc, configName));
     if (findResult != s_customCommandAliases.end()) {
       const std::set<std::string>& aliases = findResult->second;
       if (aliases.find(targetName) != aliases.end()) {
@@ -300,7 +301,7 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
         return;
       }
     }
-    s_customCommandAliases[cc].insert(targetName);
+    s_customCommandAliases[std::make_pair(cc,configName)].insert(targetName);
   } else {
     // No merged outputs, so this command must always be run.
     // Make it's name unique to its host target

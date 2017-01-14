@@ -275,7 +275,7 @@ public:
     {
     public:
       typedef std::set<cmGeneratorTarget*> TargetContextList;
-      typedef std::map<const cmCustomCommand*, std::set<std::string> >
+      typedef std::map<std::pair<const cmCustomCommand*,std::string>, std::set<std::string> >
         CustomCommandAliasMap;
       typedef Detection::OrderedTargetSet OrderedTargets;
 
