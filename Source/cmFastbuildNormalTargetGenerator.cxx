@@ -594,6 +594,7 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   vars.LinkFlags = FASTBUILD_DOLLAR_TAG "LinkFlags" FASTBUILD_DOLLAR_TAG
                                         " " FASTBUILD_DOLLAR_TAG
                                         "LinkPath" FASTBUILD_DOLLAR_TAG;
+  vars.LanguageCompileFlags = "";
   // Rule for linking library/executable.
   std::string launcher;
   const char* val =
