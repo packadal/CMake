@@ -1369,13 +1369,16 @@ void cmFastbuildNormalTargetGenerator::Generate()
         linkPath = frameworkPath + linkPath;
 
         if (GeneratorTarget->IsExecutableWithExports()) {
-          const char* defFileFlag =
-            LocalGenerator->GetMakefile()->GetDefinition(
-              "CMAKE_LINK_DEF_FILE_FLAG");
-          const cmSourceFile* defFile =
+          const cmSourceFile* def =
             GeneratorTarget->GetModuleDefinitionFile(configName);
-          if (!defFile->GetFullPath().empty()) {
-            linkFlags += defFileFlag + defFile->GetFullPath();
+          if (def) {
+            const char* defFileFlag =
+              LocalGenerator->GetMakefile()->GetDefinition(
+                "CMAKE_LINK_DEF_FILE_FLAG");
+            const std::string defFile = def->GetFullPath();
+            if (!defFile.empty()) {
+              linkFlags += defFileFlag + def->GetFullPath();
+            }
           }
         }
 
