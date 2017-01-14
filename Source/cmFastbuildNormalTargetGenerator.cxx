@@ -808,24 +808,7 @@ void cmFastbuildNormalTargetGenerator::DetectTargetObjectDependencies(
   }
 }
 
-void cmFastbuildNormalTargetGenerator::DetectTargetLinkDependencies(
-  const std::string& configName, std::vector<std::string>& dependencies)
-{
-  // Static libraries never depend on other targets for linking.
-  if (GeneratorTarget->GetType() == cmStateEnums::STATIC_LIBRARY ||
-      GeneratorTarget->GetType() == cmStateEnums::OBJECT_LIBRARY) {
-    return;
-  }
 
-  cmComputeLinkInformation* cli =
-    GeneratorTarget->GetLinkInformation(configName);
-  if (!cli) {
-    return;
-  }
-
-  const std::vector<std::string>& deps = cli->GetDepends();
-  std::copy(deps.begin(), deps.end(), std::back_inserter(dependencies));
-}
 
 std::string cmFastbuildNormalTargetGenerator::DetectTargetCompileOutputDir(
 
@@ -1445,7 +1428,6 @@ void cmFastbuildNormalTargetGenerator::Generate()
         {
           std::vector<std::string> extraDependencies;
           DetectTargetObjectDependencies(configName, extraDependencies);
-          DetectTargetLinkDependencies(configName, extraDependencies);
 
           std::for_each(extraDependencies.begin(), extraDependencies.end(),
                         UnescapeFastbuildVariables);
