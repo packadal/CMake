@@ -337,6 +337,10 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
   std::string scriptFileName(workingDirectory + targetName + shellExt);
   cmsys::ofstream scriptFile(scriptFileName.c_str());
 
+#ifndef _WIN32
+  // fastbuild use execve , script must have interpreter line
+  scriptFile << "#!/bin/sh\n";
+#endif
   for (unsigned i = 0; i != ccg.GetNumberOfCommands(); ++i) {
     std::string args;
     ccg.AppendArguments(i, args);
@@ -356,6 +360,8 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
     scriptFile << cmGlobalFastbuildGenerator::Quote(command, "\"") << args
                << std::endl;
   }
+
+  cmSystemTools::SetPermissions(scriptFileName,0777);
 
   // Write out an exec command
   /*
