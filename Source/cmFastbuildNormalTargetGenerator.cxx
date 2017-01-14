@@ -641,29 +641,14 @@ void cmFastbuildNormalTargetGenerator::ComputeLinkCmds(
   // If the above failed, then lets try this:
   switch (GeneratorTarget->GetType()) {
     case cmStateEnums::STATIC_LIBRARY: {
-      // We have archive link commands set. First, delete the existing
-      // archive.
-      {
-        std::string cmakeCommand = LocalGenerator->ConvertToOutputFormat(
-          Makefile->GetRequiredDefinition("CMAKE_COMMAND"),
-          cmLocalGenerator::SHELL);
-        linkCmds.push_back(cmakeCommand + " -E remove <TARGET>");
-      }
-      // TODO: Use ARCHIVE_APPEND for archives over a certain size.
-      {
-        std::string linkCmdVar = "CMAKE_";
-        linkCmdVar += linkLanguage;
-        linkCmdVar += "_ARCHIVE_CREATE";
-        const char* linkCmd = Makefile->GetRequiredDefinition(linkCmdVar);
-        cmSystemTools::ExpandListArgument(linkCmd, linkCmds);
-      }
-      {
-        std::string linkCmdVar = "CMAKE_";
-        linkCmdVar += linkLanguage;
-        linkCmdVar += "_ARCHIVE_FINISH";
-        const char* linkCmd = Makefile->GetRequiredDefinition(linkCmdVar);
-        cmSystemTools::ExpandListArgument(linkCmd, linkCmds);
-      }
+      std::string linkCmdVar = "CMAKE_";
+      linkCmdVar += linkLanguage;
+      linkCmdVar += "_ARCHIVE_CREATE";
+      const char* linkCmd = Makefile->GetRequiredDefinition(linkCmdVar);
+      cmSystemTools::ExpandListArgument(linkCmd, linkCmds);
+      // TODO cmake use ar && ranlib ,but fastbuild only supports one command
+      std::string& toReplace = linkCmds.back();
+      toReplace.replace(toReplace.find(" qc "), 4, " rcs ");
       return;
     }
     case cmStateEnums::SHARED_LIBRARY:
