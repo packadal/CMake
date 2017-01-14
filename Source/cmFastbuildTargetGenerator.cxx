@@ -1,11 +1,11 @@
 #include "cmFastbuildTargetGenerator.h"
 
 cmFastbuildTargetGenerator::cmFastbuildTargetGenerator(cmGeneratorTarget* gt)
-  : cmCommonTargetGenerator(cmOutputConverter::HOME_OUTPUT, gt)
+  : cmCommonTargetGenerator(gt)
 {
 }
 
-void cmFastbuildTargetGenerator::AddIncludeFlags(std::string& flags,
-                                                 const std::string& lang)
+void cmFastbuildTargetGenerator::AddIncludeFlags(std::string& /* flags */,
+                                                 const std::string& /* lang */)
 {
 }

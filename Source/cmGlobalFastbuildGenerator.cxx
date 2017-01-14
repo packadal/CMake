@@ -106,6 +106,7 @@ e_MAKE_PROGRAM=G:/tools/FBuild.exe" "-DRunCMake_SOURCE_DIR=G:/cmake/CMake/Tests/
 #include "cmComputeLinkInformation.h"
 #include "cmCustomCommandGenerator.h"
 #include "cmGeneratorTarget.h"
+#include "cmDocumentationEntry.h"
 #include "cmGlobalGeneratorFactory.h"
 #include "cmGlobalVisualStudioGenerator.h"
 #include "cmLocalFastbuildGenerator.h"
@@ -232,8 +233,8 @@ void cmGlobalFastbuildGenerator::Detail::Detection::DetectLanguages(
 {
   // Object libraries do not have linker stages
   // nor utilities
-  bool hasObjectGroups = generatorTarget->GetType() != cmState::UTILITY &&
-    generatorTarget->GetType() != cmState::GLOBAL_TARGET;
+  bool hasObjectGroups = generatorTarget->GetType() != cmStateEnums::UTILITY &&
+    generatorTarget->GetType() != cmStateEnums::GLOBAL_TARGET;
   if (!hasObjectGroups) {
     return;
   }
@@ -416,7 +417,7 @@ void cmGlobalFastbuildGenerator::ComputeTargetOrderAndDependencies(
 bool cmGlobalFastbuildGenerator::Detail::Detection::RemovalTest::operator()(
   const cmGeneratorTarget* target) const
 {
-  if (target->GetType() == cmState::GLOBAL_TARGET) {
+  if (target->GetType() == cmStateEnums::GLOBAL_TARGET) {
     // We only want to process global targets that live in the home
     // (i.e. top-level) directory.  CMake creates copies of these targets
     // in every directory, which we don't need.
@@ -637,7 +638,7 @@ bool cmGlobalFastbuildGenerator::Detail::Generation::WriteCompilers(
   for (TargetContextList::iterator iter = context.targetContexts.begin();
        iter != context.targetContexts.end(); ++iter) {
 
-    if ((*iter)->GetType() == cmState::INTERFACE_LIBRARY) {
+    if ((*iter)->GetType() == cmStateEnums::INTERFACE_LIBRARY) {
       continue;
     }
 
@@ -765,13 +766,13 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
   for (OrderedTargets::iterator targetIter = context.orderedTargets.begin();
        targetIter != context.orderedTargets.end(); ++targetIter) {
     const cmGeneratorTarget* constTarget = (*targetIter);
-    if (constTarget->GetType() == cmState::INTERFACE_LIBRARY) {
+    if (constTarget->GetType() == cmStateEnums::INTERFACE_LIBRARY) {
       continue;
     }
     // FIXME const cast are evil
     cmGeneratorTarget* target = (cmGeneratorTarget*)constTarget;
 
-    if (target->GetType() == cmState::GLOBAL_TARGET) {
+    if (target->GetType() == cmStateEnums::GLOBAL_TARGET) {
       if (!outputGlobals)
         continue;
     } else {
@@ -780,14 +781,14 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
     }
 
     switch (target->GetType()) {
-      case cmState::EXECUTABLE:
-      case cmState::SHARED_LIBRARY:
-      case cmState::STATIC_LIBRARY:
-      case cmState::MODULE_LIBRARY:
-      case cmState::OBJECT_LIBRARY:
+      case cmStateEnums::EXECUTABLE:
+      case cmStateEnums::SHARED_LIBRARY:
+      case cmStateEnums::STATIC_LIBRARY:
+      case cmStateEnums::MODULE_LIBRARY:
+      case cmStateEnums::OBJECT_LIBRARY:
       // TODO should utility target be treated differently ?
-      case cmState::UTILITY:
-      case cmState::GLOBAL_TARGET: {
+      case cmStateEnums::UTILITY:
+      case cmStateEnums::GLOBAL_TARGET: {
         cmFastbuildNormalTargetGenerator targetGenerator(target);
         targetGenerator.Generate();
         break;
@@ -818,7 +819,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
   for (OrderedTargets::iterator targetIter = context.orderedTargets.begin();
        targetIter != context.orderedTargets.end(); ++targetIter) {
     const cmGeneratorTarget* constTarget = (*targetIter);
-    if (constTarget->GetType() == cmState::INTERFACE_LIBRARY) {
+    if (constTarget->GetType() == cmStateEnums::INTERFACE_LIBRARY) {
       continue;
     }
 
@@ -832,7 +833,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
     cmGeneratorTarget* target = *findResult;
     const std::string& targetName = target->GetName();
 
-    if (target->GetType() == cmState::GLOBAL_TARGET) {
+    if (target->GetType() == cmStateEnums::GLOBAL_TARGET) {
       if (!outputGlobals)
         continue;
     } else {
@@ -942,7 +943,7 @@ void cmGlobalFastbuildGenerator::EnableLanguage(
       "Semicolon separated list of supported configuration types, "
       "only supports Debug, Release, MinSizeRel, and RelWithDebInfo, "
       "anything else will be ignored.",
-      cmState::STRING);
+      cmStateEnums::STRING);
   }
 }
 

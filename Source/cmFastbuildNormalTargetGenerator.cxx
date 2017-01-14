@@ -2,8 +2,13 @@
 
 #include "cmComputeLinkInformation.h"
 #include "cmCustomCommandGenerator.h"
+#include "cmRulePlaceholderExpander.h"
+#include "cmLinkLineComputer.h"
+#include "cmGeneratorTarget.h"
 #include "cmMakefile.h"
+#include "cmStateDirectory.h"
 #include "cmSourceFile.h"
+#include "cmState.h"
 
 #define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
 
@@ -20,7 +25,7 @@ cmFastbuildNormalTargetGenerator::cmFastbuildNormalTargetGenerator(
 void cmFastbuildNormalTargetGenerator::DetectTargetCompileDependencies(
   cmGlobalCommonGenerator* gg, std::vector<std::string>& dependencies)
 {
-  if (GeneratorTarget->GetType() == cmState::GLOBAL_TARGET) {
+  if (GeneratorTarget->GetType() == cmStateEnums::GLOBAL_TARGET) {
     // Global targets only depend on other utilities, which may not appear in
     // the TargetDepends set (e.g. "all").
     std::set<std::string> const& utils = GeneratorTarget->GetUtilities();
@@ -31,7 +36,7 @@ void cmFastbuildNormalTargetGenerator::DetectTargetCompileDependencies(
     for (cmTargetDependSet::const_iterator i = targetDeps.begin();
          i != targetDeps.end(); ++i) {
       const cmTargetDepend& depTarget = *i;
-      if (depTarget->GetType() == cmState::INTERFACE_LIBRARY) {
+      if (depTarget->GetType() == cmStateEnums::INTERFACE_LIBRARY) {
         continue;
       }
       dependencies.push_back(depTarget->GetName());
@@ -418,7 +423,7 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
 void cmFastbuildNormalTargetGenerator::DetectOutput(
   FastbuildTargetNames& targetNamesOut, const std::string& configName)
 {
-  if (GeneratorTarget->GetType() == cmState::EXECUTABLE) {
+  if (GeneratorTarget->GetType() == cmStateEnums::EXECUTABLE) {
     GeneratorTarget->GetExecutableNames(
       targetNamesOut.targetNameOut, targetNamesOut.targetNameReal,
       targetNamesOut.targetNameImport, targetNamesOut.targetNamePDB,
@@ -463,15 +468,15 @@ void cmFastbuildNormalTargetGenerator::DetectOutput(
       targetNamesOut.targetOutputDir + "/" + targetNamesOut.targetNameReal;
   }
 
-  if (GeneratorTarget->GetType() == cmState::EXECUTABLE ||
-      GeneratorTarget->GetType() == cmState::STATIC_LIBRARY ||
-      GeneratorTarget->GetType() == cmState::SHARED_LIBRARY ||
-      GeneratorTarget->GetType() == cmState::MODULE_LIBRARY) {
+  if (GeneratorTarget->GetType() == cmStateEnums::EXECUTABLE ||
+      GeneratorTarget->GetType() == cmStateEnums::STATIC_LIBRARY ||
+      GeneratorTarget->GetType() == cmStateEnums::SHARED_LIBRARY ||
+      GeneratorTarget->GetType() == cmStateEnums::MODULE_LIBRARY) {
     targetNamesOut.targetOutputPDBDir =
       GeneratorTarget->GetPDBDirectory(configName);
     targetNamesOut.targetOutputPDBDir += "/";
   }
-  if (GeneratorTarget->GetType() <= cmState::OBJECT_LIBRARY) {
+  if (GeneratorTarget->GetType() <= cmStateEnums::OBJECT_LIBRARY) {
     targetNamesOut.targetOutputCompilePDBDir =
       GeneratorTarget->GetCompilePDBPath(configName);
     if (targetNamesOut.targetOutputCompilePDBDir.empty()) {
@@ -511,7 +516,7 @@ void cmFastbuildNormalTargetGenerator::DetectLinkerLibPaths(
   for (std::vector<std::string>::const_iterator libDir = libDirs.begin();
        libDir != libDirs.end(); ++libDir) {
     std::string libpath = LocalGenerator->ConvertToOutputForExisting(
-      *libDir, cmLocalGenerator::START_OUTPUT, cmLocalGenerator::SHELL);
+      *libDir, cmLocalGenerator::SHELL);
     cmSystemTools::ConvertToOutputSlashes(libpath);
 
     // Add the linker lib path twice, once raw, then once with
@@ -544,9 +549,10 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
 
   this->GeneratorTarget->GetLinkInformation(this->GetConfigName());
 
-  cmLocalGenerator::RuleVariables vars;
-  vars.RuleLauncher = "RULE_LAUNCH_LINK";
-  vars.CMTarget = GeneratorTarget;
+  cmRulePlaceholderExpander::RuleVariables vars;
+  vars.CMTargetName = this->GeneratorTarget->GetName().c_str();
+  vars.CMTargetType =
+    cmState::GetTargetTypeName(this->GeneratorTarget->GetType());
   vars.Language = linkLanguage.c_str();
   const std::string manifests = this->GetManifests();
   vars.Manifests = manifests.c_str();
@@ -589,12 +595,26 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
                                         " " FASTBUILD_DOLLAR_TAG
                                         "LinkPath" FASTBUILD_DOLLAR_TAG;
   // Rule for linking library/executable.
+  std::string launcher;
+  const char* val =
+    LocalGenerator->GetRuleLauncher(this->GeneratorTarget, "RULE_LAUNCH_LINK");
+  if (val && *val) {
+    launcher = val;
+    launcher += " ";
+  }
+
+  CM_AUTO_PTR<cmRulePlaceholderExpander> rulePlaceholderExpander(
+    LocalGenerator->CreateRulePlaceholderExpander());
+  rulePlaceholderExpander->SetTargetImpLib(
+    FASTBUILD_DOLLAR_TAG "TargetOutputImplib" FASTBUILD_DOLLAR_TAG);
+
   std::vector<std::string> linkCmds;
   ComputeLinkCmds(linkCmds, configName);
   for (std::vector<std::string>::iterator i = linkCmds.begin();
        i != linkCmds.end(); ++i) {
-    ((cmLocalFastbuildGenerator*)LocalGenerator)
-      ->ExpandRuleVariables(*i, vars);
+    *i = launcher + *i;
+    rulePlaceholderExpander->ExpandRuleVariables(
+      (cmLocalFastbuildGenerator*)LocalGenerator, *i, vars);
   }
 
   command = BuildCommandLine(linkCmds);
@@ -619,7 +639,7 @@ void cmFastbuildNormalTargetGenerator::ComputeLinkCmds(
 
   // If the above failed, then lets try this:
   switch (GeneratorTarget->GetType()) {
-    case cmState::STATIC_LIBRARY: {
+    case cmStateEnums::STATIC_LIBRARY: {
       // We have archive link commands set. First, delete the existing
       // archive.
       {
@@ -645,9 +665,9 @@ void cmFastbuildNormalTargetGenerator::ComputeLinkCmds(
       }
       return;
     }
-    case cmState::SHARED_LIBRARY:
-    case cmState::MODULE_LIBRARY:
-    case cmState::EXECUTABLE:
+    case cmStateEnums::SHARED_LIBRARY:
+    case cmStateEnums::MODULE_LIBRARY:
+    case cmStateEnums::EXECUTABLE:
       break;
     default:
       assert(0 && "Unexpected target type");
@@ -696,8 +716,10 @@ std::string cmFastbuildNormalTargetGenerator::ComputeDefines(
 void cmFastbuildNormalTargetGenerator::DetectBaseCompileCommand(
   std::string& command, const std::string& language)
 {
-  cmLocalGenerator::RuleVariables compileObjectVars;
-  compileObjectVars.CMTarget = GeneratorTarget;
+  cmRulePlaceholderExpander::RuleVariables compileObjectVars;
+  compileObjectVars.CMTargetName = GeneratorTarget->GetName().c_str();
+  compileObjectVars.CMTargetType =
+    cmState::GetTargetTypeName(GeneratorTarget->GetType());
   compileObjectVars.Language = language.c_str();
   compileObjectVars.Source =
     FASTBUILD_DOLLAR_TAG "FB_INPUT_1_PLACEHOLDER" FASTBUILD_DOLLAR_TAG;
@@ -724,11 +746,18 @@ void cmFastbuildNormalTargetGenerator::DetectBaseCompileCommand(
   std::vector<std::string> compileCmds;
   cmSystemTools::ExpandListArgument(compileCmd, compileCmds);
 
+  CM_AUTO_PTR<cmRulePlaceholderExpander> rulePlaceholderExpander(
+    LocalGenerator->CreateRulePlaceholderExpander());
+
+  rulePlaceholderExpander->SetTargetImpLib(
+    FASTBUILD_DOLLAR_TAG "TargetOutputImplib" FASTBUILD_DOLLAR_TAG);
+
   for (std::vector<std::string>::iterator i = compileCmds.begin();
        i != compileCmds.end(); ++i) {
     std::string& compileCmdStr = *i;
-    ((cmLocalFastbuildGenerator*)LocalGenerator)
-      ->ExpandRuleVariables(compileCmdStr, compileObjectVars);
+    rulePlaceholderExpander->ExpandRuleVariables(
+      (cmLocalFastbuildGenerator*)LocalGenerator, compileCmdStr,
+      compileObjectVars);
   }
 
   command = BuildCommandLine(compileCmds);
@@ -776,8 +805,8 @@ void cmFastbuildNormalTargetGenerator::DetectTargetLinkDependencies(
   const std::string& configName, std::vector<std::string>& dependencies)
 {
   // Static libraries never depend on other targets for linking.
-  if (GeneratorTarget->GetType() == cmState::STATIC_LIBRARY ||
-      GeneratorTarget->GetType() == cmState::OBJECT_LIBRARY) {
+  if (GeneratorTarget->GetType() == cmStateEnums::STATIC_LIBRARY ||
+      GeneratorTarget->GetType() == cmStateEnums::OBJECT_LIBRARY) {
     return;
   }
 
@@ -937,30 +966,30 @@ void cmFastbuildNormalTargetGenerator::Generate()
   // Detection of the link command as follows:
   std::string linkCommand = "Library";
   switch (GeneratorTarget->GetType()) {
-    case cmState::INTERFACE_LIBRARY:
+    case cmStateEnums::INTERFACE_LIBRARY:
       // We don't write out interface libraries.
       return;
-    case cmState::EXECUTABLE: {
+    case cmStateEnums::EXECUTABLE: {
       linkCommand = "Executable";
       break;
     }
-    case cmState::SHARED_LIBRARY: {
+    case cmStateEnums::SHARED_LIBRARY: {
       linkCommand = "DLL";
       break;
     }
-    case cmState::STATIC_LIBRARY:
-    case cmState::MODULE_LIBRARY:
-    case cmState::OBJECT_LIBRARY: {
+    case cmStateEnums::STATIC_LIBRARY:
+    case cmStateEnums::MODULE_LIBRARY:
+    case cmStateEnums::OBJECT_LIBRARY: {
       // No changes required
       break;
     }
-    case cmState::UTILITY:
-    case cmState::GLOBAL_TARGET: {
+    case cmStateEnums::UTILITY:
+    case cmStateEnums::GLOBAL_TARGET: {
       // No link command used
       linkCommand = "NoLinkCommand";
       break;
     }
-    case cmState::UNKNOWN_LIBRARY: {
+    case cmStateEnums::UNKNOWN_LIBRARY: {
       // Ignoring this target generation...
       return;
     }
@@ -1038,7 +1067,7 @@ void cmFastbuildNormalTargetGenerator::Generate()
       EnsureDirectoryExists(targetNames.targetOutputCompilePDBDir,
                             Makefile->GetHomeOutputDirectory());
 
-      if (GeneratorTarget->GetType() != cmState::OBJECT_LIBRARY) {
+      if (GeneratorTarget->GetType() != cmStateEnums::OBJECT_LIBRARY) {
         // on Windows the output dir is already needed at compile time
         // ensure the directory exists (OutDir test)
         EnsureDirectoryExists(targetNames.targetOutputDir,
@@ -1302,9 +1331,9 @@ void cmFastbuildNormalTargetGenerator::Generate()
   // Object libraries do not have linker stages
   // nor utilities
   const bool hasLinkerStage =
-    GeneratorTarget->GetType() != cmState::OBJECT_LIBRARY &&
-    GeneratorTarget->GetType() != cmState::UTILITY &&
-    GeneratorTarget->GetType() != cmState::GLOBAL_TARGET;
+    GeneratorTarget->GetType() != cmStateEnums::OBJECT_LIBRARY &&
+    GeneratorTarget->GetType() != cmStateEnums::UTILITY &&
+    GeneratorTarget->GetType() != cmStateEnums::GLOBAL_TARGET;
 
   // Iterate over each configuration
   // This time to define linker settings for each config
@@ -1331,9 +1360,15 @@ void cmFastbuildNormalTargetGenerator::Generate()
         std::string frameworkPath;
         std::string dummyLinkPath;
 
-        LocalGenerator->GetTargetFlags(linkLibs, targetFlags, linkFlags,
-                                       frameworkPath, dummyLinkPath,
-                                       GeneratorTarget, false);
+        cmLocalGenerator* root =
+          LocalGenerator->GetGlobalGenerator()->GetLocalGenerators()[0];
+        CM_AUTO_PTR<cmLinkLineComputer> linkLineComputer(
+          LocalGenerator->GetGlobalGenerator()->CreateLinkLineComputer(
+            root, root->GetStateSnapshot().GetDirectory()));
+
+        LocalGenerator->GetTargetFlags(
+          linkLineComputer.get(), configName, linkLibs, targetFlags, linkFlags,
+          frameworkPath, dummyLinkPath, GeneratorTarget);
 
         std::string linkPath;
         DetectLinkerLibPaths(linkPath, configName);

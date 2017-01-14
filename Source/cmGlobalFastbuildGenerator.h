@@ -33,30 +33,30 @@ public:
   static cmGlobalGeneratorFactory* NewFactory();
 
   void EnableLanguage(std::vector<std::string> const& lang, cmMakefile* mf,
-                      bool optional);
-  virtual void Generate();
-  virtual void GenerateBuildCommand(
+                      bool optional) CM_OVERRIDE;
+  void Generate() CM_OVERRIDE;
+  void GenerateBuildCommand(
     std::vector<std::string>& makeCommand, const std::string& makeProgram,
     const std::string& projectName, const std::string& projectDir,
     const std::string& targetName, const std::string& config, bool fast,
-    bool verbose, std::vector<std::string> const& makeOptions);
+    bool verbose, std::vector<std::string> const& makeOptions) CM_OVERRIDE;
 
   ///! create the correct local generator
-  virtual cmLocalGenerator* CreateLocalGenerator(cmMakefile* makefile);
-  virtual std::string GetName() const
+  cmLocalGenerator* CreateLocalGenerator(cmMakefile* makefile) CM_OVERRIDE;
+  std::string GetName() const CM_OVERRIDE
   {
     return cmGlobalFastbuildGenerator::GetActualName();
   }
 
-  virtual bool IsMultiConfig() { return true; }
+  bool IsMultiConfig() const CM_OVERRIDE { return true; }
 
-  virtual void AppendDirectoryForConfig(const std::string& prefix,
-                                        const std::string& config,
-                                        const std::string& suffix,
-                                        std::string& dir);
+  void AppendDirectoryForConfig(const std::string& prefix,
+                                const std::string& config,
+                                const std::string& suffix,
+                                std::string& dir) CM_OVERRIDE;
 
-  virtual void ComputeTargetObjectDirectory(cmGeneratorTarget*) const;
-  virtual const char* GetCMakeCFGIntDir() const;
+  void ComputeTargetObjectDirectory(cmGeneratorTarget*) const CM_OVERRIDE;
+  const char* GetCMakeCFGIntDir() const CM_OVERRIDE;
 
   static std::string GetActualName() { return "Fastbuild"; }
 
@@ -64,6 +64,12 @@ public:
   static void GetDocumentation(cmDocumentationEntry& entry);
 
   static bool SupportsToolset() { return false; }
+
+  /**
+   * Utilized by the generator factory to determine if this generator
+   * supports platforms.
+   */
+  static bool SupportsPlatform() { return false; }
 
   static std::string Quote(const std::string& str,
                            const std::string& quotation = "'");

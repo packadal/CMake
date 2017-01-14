@@ -14,7 +14,7 @@
 
 #include "cmLocalCommonGenerator.h"
 
-#include <cmsys/auto_ptr.hxx>
+#include <cm_auto_ptr.hxx>
 
 class cmSourceFile;
 class cmSourceGroup;
@@ -31,20 +31,19 @@ class cmLocalFastbuildGenerator : public cmLocalCommonGenerator
 {
 public:
   cmLocalFastbuildGenerator(cmGlobalGenerator* gg, cmMakefile* makefile);
-  virtual ~cmLocalFastbuildGenerator();
+  ~cmLocalFastbuildGenerator() CM_OVERRIDE;
 
-  virtual void Generate();
+  void Generate() CM_OVERRIDE;
 
-  void ExpandRuleVariables(std::string& s, const RuleVariables& replaceValues);
-  virtual std::string ConvertToLinkReference(std::string const& lib,
-                                             OutputFormat format);
-  virtual void ComputeObjectFilenames(
+  std::string ConvertToLinkReference(std::string const& lib,
+                                     OutputFormat format);
+  void ComputeObjectFilenames(
     std::map<cmSourceFile const*, std::string>& mapping,
-    cmGeneratorTarget const* gt);
-  virtual std::string GetTargetDirectory(
-    cmGeneratorTarget const* target) const;
-  virtual void AppendFlagEscape(std::string& flags,
-                                const std::string& rawFlag);
+    cmGeneratorTarget const* gt) CM_OVERRIDE;
+  std::string GetTargetDirectory(const cmGeneratorTarget* gt) const
+    CM_OVERRIDE;
+  void AppendFlagEscape(std::string& flags,
+                        const std::string& rawFlag) CM_OVERRIDE;
 };
 
 #endif
