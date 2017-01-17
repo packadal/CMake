@@ -102,11 +102,26 @@ public:
                       const std::vector<std::string>& values,
                       const std::string& operation = "=");
 
+      void WriteDirective(const std::string& directive);
+
     private:
       cmGeneratedFileStream fout;
       std::string linePrefix;
       std::string closingScope;
     };
+
+    struct BFFFiles
+    {
+      FileContext base;
+      FileContext main;
+      std::map<std::string, FileContext> perConfig;
+      std::string rootDir;
+
+      void Init(const std::string& root,
+                const std::vector<std::string>& configs);
+      void Close(cmGlobalGenerator* gg);
+    };
+
     class Detection
     {
     public:
@@ -281,14 +296,13 @@ public:
 
       struct GenerationContext
       {
-        GenerationContext(cmLocalCommonGenerator* localGen,
-                          FileContext& fileCtx)
+        GenerationContext(cmLocalCommonGenerator* localGen, BFFFiles& bff)
           : root(localGen)
-          , fc(fileCtx)
+          , bffFiles(bff)
         {
         }
         cmLocalCommonGenerator* root;
-        FileContext& fc;
+        BFFFiles& bffFiles;
         OrderedTargets orderedTargets;
         TargetContextList targetContexts;
       };
@@ -329,7 +343,7 @@ public:
 
       static bool WriteCompilers(GenerationContext& context);
 
-      static void WriteConfigurations(FileContext& fileContext,
+      static void WriteConfigurations(BFFFiles& bffFiles,
                                       cmMakefile* makefile);
 
       struct CompileCommand
@@ -351,7 +365,7 @@ public:
   void ComputeTargetOrderAndDependencies(
     Detail::Detection::OrderedTargetSet& orderedTargets);
 
-  Detail::FileContext g_fc;
+  Detail::BFFFiles g_bffFiles;
 
   static const char* FASTBUILD_DOLLAR_TAG;
 

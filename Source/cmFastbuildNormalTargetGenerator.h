@@ -72,7 +72,7 @@ private:
 
   std::string GetManifestsAsFastbuildPath();
 
-  cmGlobalFastbuildGenerator::Detail::FileContext& m_fileContext;
+  cmGlobalFastbuildGenerator::Detail::BFFFiles& m_bffFiles;
 
   static void UnescapeFastbuildVariables(std::string& string);
 

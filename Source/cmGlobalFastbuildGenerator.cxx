@@ -568,6 +568,43 @@ void cmGlobalFastbuildGenerator::Detail::Generation::BuildTargetContexts(
   }
 }
 
+static std::string GenBffPath(const std::string& rootDir,
+                              const std::string& name)
+{
+  return rootDir + "/" + name + ".bff";
+}
+
+void cmGlobalFastbuildGenerator::Detail::BFFFiles::Init(
+  const std::string& root, const std::vector<std::string>& configs)
+{
+  rootDir = root;
+  main.setFileName(GenBffPath(rootDir, "fbuild"));
+  base.setFileName(GenBffPath(rootDir, "base"));
+
+  for (std::vector<std::string>::const_iterator iter = configs.cbegin();
+       iter != configs.cend(); ++iter) {
+    std::string configName = *iter;
+
+    FileContext& ret = perConfig[configName];
+    ret.setFileName(GenBffPath(rootDir, configName));
+    ret.WriteSectionHeader(("Fastbuild config for :" + configName).c_str());
+    ret.WriteDirective("include \"base.bff\"");
+  }
+}
+
+void cmGlobalFastbuildGenerator::Detail::BFFFiles::Close(cmGlobalGenerator* gg)
+{
+  main.close();
+  base.close();
+  gg->FileReplacedDuringGenerate(GenBffPath(rootDir, "fbuild"));
+  gg->FileReplacedDuringGenerate(GenBffPath(rootDir, "base"));
+  for (std::map<std::string, FileContext>::iterator it = perConfig.begin();
+       it != perConfig.end(); ++it) {
+    it->second.close();
+    gg->FileReplacedDuringGenerate(GenBffPath(rootDir, it->first));
+  }
+}
+
 void cmGlobalFastbuildGenerator::Detail::Generation::GenerateRootBFF(
   cmGlobalFastbuildGenerator* self)
 {
@@ -575,22 +612,25 @@ void cmGlobalFastbuildGenerator::Detail::Generation::GenerateRootBFF(
   cmLocalFastbuildGenerator* root =
     static_cast<cmLocalFastbuildGenerator*>(self->GetLocalGenerators()[0]);
 
-  // Calculate filename
-  std::string fname = root->GetMakefile()->GetHomeOutputDirectory();
-  fname += "/fbuild.bff";
+  std::string rootDir = root->GetMakefile()->GetHomeOutputDirectory();
 
-  self->g_fc.setFileName(fname);
-  GenerationContext context(root, self->g_fc);
+  std::vector<std::string> configs;
+  root->GetMakefile()->GetConfigurations(configs, false);
+  self->g_bffFiles.Init(rootDir, configs);
+
+  GenerationContext context(root, self->g_bffFiles);
   self->ComputeTargetOrderAndDependencies(context.orderedTargets);
   BuildTargetContexts(self, context.targetContexts);
   // write root bff
-  self->g_fc.WriteSectionHeader("Fastbuild makefile - Generated using CMAKE");
+  self->g_bffFiles.base.WriteSectionHeader(
+    "Fastbuild makefile - Generated using CMAKE");
+  self->g_bffFiles.base.WriteDirective("once");
 
-  WritePlaceholders(self->g_fc);
-  WriteSettings(self->g_fc,
+  WritePlaceholders(self->g_bffFiles.base);
+  WriteSettings(self->g_bffFiles.base,
                 self->GetCMakeInstance()->GetHomeOutputDirectory());
   WriteCompilers(context);
-  WriteConfigurations(self->g_fc, root->GetMakefile());
+  WriteConfigurations(self->g_bffFiles, root->GetMakefile());
 
   // Sort targets
   WriteTargetDefinitions(context, false);
@@ -598,8 +638,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::GenerateRootBFF(
   WriteTargetDefinitions(context, true);
   WriteAliases(context, self, true);
 
-  self->g_fc.close();
-  self->FileReplacedDuringGenerate(fname);
+  self->g_bffFiles.Close(self);
 }
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WritePlaceholders(
@@ -627,12 +666,20 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteSettings(
   fileContext.WritePopScope();
 }
 
+void cmGlobalFastbuildGenerator::Detail::FileContext::WriteDirective(
+  const std::string& directive)
+{
+  fout << "#" << directive << "\n";
+}
+
 bool cmGlobalFastbuildGenerator::Detail::Generation::WriteCompilers(
   GenerationContext& context)
 {
   cmMakefile* mf = context.root->GetMakefile();
 
-  context.fc.WriteSectionHeader("Compilers");
+  FileContext& base = context.bffFiles.base;
+
+  base.WriteSectionHeader("Compilers");
 
   // Detect each language used in the definitions
   std::set<std::string> languages;
@@ -701,13 +748,12 @@ bool cmGlobalFastbuildGenerator::Detail::Generation::WriteCompilers(
     cmSystemTools::ConvertToOutputSlashes(compilerFile);
 
     // Write out the compiler that has been configured
-    context.fc.WriteCommand("Compiler", Quote(compilerDef.name));
-    context.fc.WritePushScope();
-    context.fc.WriteVariable("CompilerRoot", Quote(compilerPath));
-    context.fc.WriteVariable("Executable", Quote(compilerFile));
-    context.fc.WriteArray("ExtraFiles", Wrap(extraFiles));
-
-    context.fc.WritePopScope();
+    base.WriteCommand("Compiler", Quote(compilerDef.name));
+    base.WritePushScope();
+    base.WriteVariable("CompilerRoot", Quote(compilerPath));
+    base.WriteVariable("Executable", Quote(compilerFile));
+    base.WriteArray("ExtraFiles", Wrap(extraFiles));
+    base.WritePopScope();
   }
 
   // Now output the compiler names according to language as variables
@@ -720,23 +766,24 @@ bool cmGlobalFastbuildGenerator::Detail::Generation::WriteCompilers(
     // Output a default compiler to absorb the library requirements for a
     // compiler
     if (iter == languageToCompiler.begin()) {
-      context.fc.WriteVariable("Compiler_dummy", Quote(compilerDef.name));
+      base.WriteVariable("Compiler_dummy", Quote(compilerDef.name));
     }
 
-    context.fc.WriteVariable("Compiler_" + language, Quote(compilerDef.name));
+    base.WriteVariable("Compiler_" + language, Quote(compilerDef.name));
   }
 
   return true;
 }
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WriteConfigurations(
-  FileContext& fileContext, cmMakefile* makefile)
+  BFFFiles& bffFiles, cmMakefile* makefile)
 {
-  fileContext.WriteSectionHeader("Configurations");
+  FileContext& base = bffFiles.base;
+  base.WriteSectionHeader("Configurations");
 
-  fileContext.WriteVariable("ConfigBase", "");
-  fileContext.WritePushScopeStruct();
-  fileContext.WritePopScope();
+  base.WriteVariable("ConfigBase", "");
+  base.WritePushScopeStruct();
+  base.WritePopScope();
 
   // Iterate over all configurations and define them:
   std::vector<std::string> configs;
@@ -744,24 +791,27 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteConfigurations(
   for (std::vector<std::string>::const_iterator iter = configs.begin();
        iter != configs.end(); ++iter) {
     const std::string& configName = *iter;
-    fileContext.WriteVariable("config_" + configName, "");
-    fileContext.WritePushScopeStruct();
+    FileContext& perConfig = bffFiles.perConfig[configName];
+    perConfig.WriteVariable("config_" + configName, "");
+    perConfig.WritePushScopeStruct();
 
     // Using base config
-    fileContext.WriteCommand("Using", ".ConfigBase");
+    perConfig.WriteCommand("Using", ".ConfigBase");
 
-    fileContext.WritePopScope();
+    perConfig.WritePopScope();
+
+    bffFiles.main.WriteDirective("include \"" + *iter + ".bff\"");
   }
 
   // Write out a list of all configs
-  fileContext.WriteArray("all_configs", Wrap(configs, ".config_", ""));
+  bffFiles.main.WriteArray("all_configs", Wrap(configs, ".config_", ""));
 }
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
   GenerationContext& context, bool outputGlobals)
 {
-  context.fc.WriteSectionHeader((outputGlobals) ? "Global Target Definitions"
-                                                : "Target Definitions");
+  context.bffFiles.main.WriteSectionHeader(
+    (outputGlobals) ? "Global Target Definitions" : "Target Definitions");
 
   // Now iterate each target in order
   for (OrderedTargets::iterator targetIter = context.orderedTargets.begin();
@@ -806,7 +856,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
   GenerationContext& context, cmGlobalFastbuildGenerator* gg,
   bool outputGlobals)
 {
-  context.fc.WriteSectionHeader("Aliases");
+  context.bffFiles.main.WriteSectionHeader("Aliases");
 
   // Write the following aliases:
   // Per Target
@@ -858,48 +908,52 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
   }
 
   if (!outputGlobals) {
-    context.fc.WriteComment("Per config");
+    context.bffFiles.main.WriteComment("Per config");
     std::vector<std::string> aliasTargets;
     for (TargetListMap::iterator iter = perConfig.begin();
          iter != perConfig.end(); ++iter) {
       const std::string& configName = iter->first;
       const std::vector<std::string>& targets = iter->second;
 
-      context.fc.WriteCommand("Alias", Quote(configName));
-      context.fc.WritePushScope();
-      context.fc.WriteArray("Targets", Wrap(targets, "'", "'"));
-      context.fc.WritePopScope();
+      FileContext& fc = context.bffFiles.perConfig[configName];
+
+      fc.WriteCommand("Alias", Quote(configName));
+      fc.WritePushScope();
+      fc.WriteArray("Targets", Wrap(targets, "'", "'"));
+      fc.WritePopScope();
 
       aliasTargets.clear();
       aliasTargets.push_back(configName);
-      context.fc.WriteCommand("Alias", Quote("ALL_BUILD-" + configName));
-      context.fc.WritePushScope();
-      context.fc.WriteArray("Targets", Wrap(aliasTargets, "'", "'"));
-      context.fc.WritePopScope();
+      fc.WriteCommand("Alias", Quote("ALL_BUILD-" + configName));
+      fc.WritePushScope();
+      fc.WriteArray("Targets", Wrap(aliasTargets, "'", "'"));
+      fc.WritePopScope();
     }
   }
 
-  context.fc.WriteComment("Per targets");
+  context.bffFiles.main.WriteComment("Per targets");
   for (TargetListMap::iterator iter = perTarget.begin();
        iter != perTarget.end(); ++iter) {
     const std::string& targetName = iter->first;
     const std::vector<std::string>& targets = iter->second;
 
-    context.fc.WriteCommand("Alias", "'" + targetName + "'");
-    context.fc.WritePushScope();
-    context.fc.WriteArray("Targets", Wrap(targets, "'", "'"));
-    context.fc.WritePopScope();
+    FileContext& fc = context.bffFiles.main;
+    fc.WriteCommand("Alias", "'" + targetName + "'");
+    fc.WritePushScope();
+    fc.WriteArray("Targets", Wrap(targets, "'", "'"));
+    fc.WritePopScope();
   }
 
   if (!outputGlobals) {
     std::vector<std::string> configs;
     context.root->GetMakefile()->GetConfigurations(configs, false);
 
-    context.fc.WriteComment("All");
-    context.fc.WriteCommand("Alias", "'All'");
-    context.fc.WritePushScope();
-    context.fc.WriteArray("Targets", Wrap(configs, "'", "'"));
-    context.fc.WritePopScope();
+    FileContext& fc = context.bffFiles.main;
+    fc.WriteComment("All");
+    fc.WriteCommand("Alias", "'All'");
+    fc.WritePushScope();
+    fc.WriteArray("Targets", Wrap(configs, "'", "'"));
+    fc.WritePopScope();
   }
 }
 
