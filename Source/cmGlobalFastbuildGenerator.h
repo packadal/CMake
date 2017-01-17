@@ -358,8 +358,14 @@ public:
 
       static void WriteAliases(GenerationContext& context,
                                cmGlobalFastbuildGenerator* gg,
-                               bool outputGlobals);
+                               bool outputGlobals,
+                               const std::vector<std::string>& configs);
+      static void DetectDuplicate(GenerationContext& context,
+                                  std::vector<std::string>& configs);
     };
+
+    // key is outputfile, value is config which generated this file
+    typedef std::map<std::string, std::set<std::string> > DuplicateOutputs;
   };
 
   void ComputeTargetOrderAndDependencies(
@@ -368,6 +374,8 @@ public:
   Detail::BFFFiles g_bffFiles;
 
   static const char* FASTBUILD_DOLLAR_TAG;
+
+  Detail::DuplicateOutputs g_duplicateOutputs;
 
 private:
   class Factory;

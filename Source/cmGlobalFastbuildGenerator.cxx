@@ -605,6 +605,40 @@ void cmGlobalFastbuildGenerator::Detail::BFFFiles::Close(cmGlobalGenerator* gg)
   }
 }
 
+void cmGlobalFastbuildGenerator::Detail::Generation::DetectDuplicate(
+  GenerationContext& context, std::vector<std::string>& configs)
+{
+
+  std::ostringstream w;
+  w << "duplicate outputs in different config :\n";
+
+  DuplicateOutputs& duplicateOutputs =
+    ((cmGlobalFastbuildGenerator*)context.root->GetGlobalGenerator())
+      ->g_duplicateOutputs;
+
+  bool hasDuplicate = false;
+  // checking if there is duplicate output in different config
+  for (DuplicateOutputs::const_iterator iter = duplicateOutputs.cbegin();
+       iter != duplicateOutputs.cend(); ++iter) {
+    if (iter->second.size() > 1) {
+      hasDuplicate = true;
+      w << iter->first << " in configs:";
+      std::copy(iter->second.begin(), iter->second.end(),
+                std::ostream_iterator<std::string>(w, ";"));
+      w << "\n";
+    }
+  }
+  if (!hasDuplicate) {
+    return;
+  }
+
+  configs.resize(1);
+  w << "fastbuild generator fallback to build " << configs.front()
+    << " config only\n";
+
+  context.root->GetCMakeInstance()->IssueMessage(cmake::WARNING, w.str());
+}
+
 void cmGlobalFastbuildGenerator::Detail::Generation::GenerateRootBFF(
   cmGlobalFastbuildGenerator* self)
 {
@@ -634,9 +668,20 @@ void cmGlobalFastbuildGenerator::Detail::Generation::GenerateRootBFF(
 
   // Sort targets
   WriteTargetDefinitions(context, false);
-  WriteAliases(context, self, false);
+
+  DetectDuplicate(context, configs);
+  for (std::vector<std::string>::const_iterator iter = configs.cbegin();
+       iter != configs.cend(); ++iter) {
+    self->g_bffFiles.main.WriteDirective("include \"" + *iter + ".bff\"");
+  }
+
+  // Write out a list of all configs
+  self->g_bffFiles.main.WriteArray("all_configs",
+                                   Wrap(configs, ".config_", ""));
+
+  WriteAliases(context, self, false, configs);
   WriteTargetDefinitions(context, true);
-  WriteAliases(context, self, true);
+  WriteAliases(context, self, true, configs);
 
   self->g_bffFiles.Close(self);
 }
@@ -800,11 +845,8 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteConfigurations(
 
     perConfig.WritePopScope();
 
-    bffFiles.main.WriteDirective("include \"" + *iter + ".bff\"");
   }
 
-  // Write out a list of all configs
-  bffFiles.main.WriteArray("all_configs", Wrap(configs, ".config_", ""));
 }
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
@@ -854,7 +896,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
   GenerationContext& context, cmGlobalFastbuildGenerator* gg,
-  bool outputGlobals)
+  bool outputGlobals, const std::vector<std::string>& configs)
 {
   context.bffFiles.main.WriteSectionHeader("Aliases");
 
@@ -893,8 +935,6 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
     }
 
     // Define compile flags
-    std::vector<std::string> configs;
-    context.root->GetMakefile()->GetConfigurations(configs, false);
     for (std::vector<std::string>::const_iterator iter = configs.begin();
          iter != configs.end(); ++iter) {
       const std::string& configName = *iter;

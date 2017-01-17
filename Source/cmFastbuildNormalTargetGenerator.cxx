@@ -19,6 +19,8 @@ cmFastbuildNormalTargetGenerator::cmFastbuildNormalTargetGenerator(
   cmGeneratorTarget* gt)
   : cmFastbuildTargetGenerator(gt)
   , m_bffFiles(((cmGlobalFastbuildGenerator*)GlobalGenerator)->g_bffFiles)
+  , m_duplicateOutputs(
+      ((cmGlobalFastbuildGenerator*)GlobalGenerator)->g_duplicateOutputs)
 {
 }
 
@@ -282,6 +284,13 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
   // but if the command should always run (i.e. post builds etc)
   // then we will output a new one.
   if (!mergedOutputs.empty()) {
+
+    for (std::vector<std::string>::const_iterator iter =
+           mergedOutputs.cbegin();
+         iter != mergedOutputs.cend(); ++iter) {
+      m_duplicateOutputs[*iter].insert(configName);
+    }
+
     // Check if this custom command has already been output.
     // If it has then just drop an alias here to the original
     cmGlobalFastbuildGenerator::Detail::Generation::CustomCommandAliasMap::
