@@ -244,16 +244,6 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
   // used as custom build step target name (if no output)
   // or script file name
   std::string simpleName = targetName;
-  if (!mergedOutputs.empty()) {
-    // when generating output file, makes relapath as part of targetName
-    // to make it unique
-    std::string relPath = LocalGenerator->ConvertToRelativePath(
-      LocalGenerator->GetState()->GetBinaryDirectory(), mergedOutputs[0]);
-#ifdef _WIN32
-    std::replace(relPath.begin(), relPath.end(), '/', '\\');
-#endif
-    targetName = targetName + relPath;
-  }
 
   // TODO: Double check that none of the outputs are 'symbolic'
   // In which case, FASTBuild won't want them treated as
@@ -290,6 +280,15 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
          iter != mergedOutputs.cend(); ++iter) {
       m_duplicateOutputs[*iter].insert(configName);
     }
+
+    // when generating output file, makes relapath as part of targetName
+    // to make it unique
+    std::string relPath = LocalGenerator->ConvertToRelativePath(
+            LocalGenerator->GetState()->GetBinaryDirectory(), mergedOutputs[0]);
+#ifdef _WIN32
+    std::replace(relPath.begin(), relPath.end(), '/', '\\');
+#endif
+    targetName = targetName + relPath;
 
     // Check if this custom command has already been output.
     // If it has then just drop an alias here to the original
