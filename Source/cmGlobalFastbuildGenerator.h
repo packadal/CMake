@@ -379,8 +379,6 @@ public:
 
 private:
   class Factory;
-
-  std::vector<std::string> Configurations;
 };
 
 #endif

@@ -896,7 +896,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
 
 void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
   GenerationContext& context, cmGlobalFastbuildGenerator* gg,
-  bool outputGlobals, const std::vector<std::string>& configs)
+  bool outputGlobals, const std::vector<std::string>& usedConfigs)
 {
   context.bffFiles.main.WriteSectionHeader("Aliases");
 
@@ -934,9 +934,8 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
         continue;
     }
 
-    // Define compile flags
-    for (std::vector<std::string>::const_iterator iter = configs.begin();
-         iter != configs.end(); ++iter) {
+    for (std::vector<std::string>::const_iterator iter = usedConfigs.begin();
+         iter != usedConfigs.end(); ++iter) {
       const std::string& configName = *iter;
       std::string aliasName = targetName + "-" + configName;
 
