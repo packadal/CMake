@@ -133,7 +133,6 @@ void cmGlobalFastbuildGenerator::Detail::FileContext::setFileName(
   const std::string fileName)
 {
   fout.Open(fileName.c_str());
-  fout.SetCopyIfDifferent(true);
 }
 
 void cmGlobalFastbuildGenerator::Detail::FileContext::close()
@@ -684,6 +683,7 @@ void cmGlobalFastbuildGenerator::Detail::Generation::GenerateRootBFF(
   WriteTargetDefinitions(context, true);
   WriteAliases(context, self, true, configs);
 
+  WriteBFFRebuildTarget(self,self->g_bffFiles.main);
   self->g_bffFiles.Close(self);
 }
 
@@ -996,6 +996,71 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteAliases(
     fc.WriteArray("Targets", Wrap(configs, "'", "'"));
     fc.WritePopScope();
   }
+}
+
+void cmGlobalFastbuildGenerator::Detail::Generation::WriteBFFRebuildTarget(
+  cmGlobalFastbuildGenerator* gg, FileContext& fc)
+{
+  std::vector<std::string> implicitDeps;
+  for (std::vector<cmLocalGenerator*>::const_iterator i =
+         gg->LocalGenerators.begin();
+       i != gg->LocalGenerators.end(); ++i) {
+    std::vector<std::string> const& lf = (*i)->GetMakefile()->GetListFiles();
+    for (std::vector<std::string>::const_iterator fi = lf.begin();
+         fi != lf.end(); ++fi) {
+      implicitDeps.push_back(*fi);
+    }
+  }
+
+  std::string outDir =
+    std::string(
+      gg->LocalGenerators[0]->GetMakefile()->GetHomeOutputDirectory()) +
+#ifdef _WIN32
+    '\\'
+#else
+    '/'
+#endif
+    ;
+
+  implicitDeps.push_back(outDir + "CMakeCache.txt");
+
+  std::sort(implicitDeps.begin(), implicitDeps.end());
+  implicitDeps.erase(std::unique(implicitDeps.begin(), implicitDeps.end()),
+                     implicitDeps.end());
+
+  fc.WriteSectionHeader("re-run CMake to update fastbuild configs");
+  fc.WriteCommand("Exec", cmGlobalFastbuildGenerator::Quote("rebuild-bff"));
+
+  fc.WritePushScope();
+  {
+    cmLocalGenerator* lg = gg->LocalGenerators[0];
+
+    std::ostringstream args;
+
+    args << lg->ConvertToOutputFormat(cmSystemTools::GetCMakeCommand(),
+                                      cmOutputConverter::SHELL)
+         << " -H"
+         << lg->ConvertToOutputFormat(lg->GetSourceDirectory(),
+                                      cmOutputConverter::SHELL)
+         << " -B"
+         << lg->ConvertToOutputFormat(lg->GetBinaryDirectory(),
+                                      cmOutputConverter::SHELL);
+
+    fc.WriteArray("ExecInput",
+                  cmGlobalFastbuildGenerator::Wrap(implicitDeps, "'", "'"));
+    fc.WriteVariable("ExecExecutable", cmGlobalFastbuildGenerator::Quote(
+                                         cmSystemTools::GetCMakeCommand()));
+    fc.WriteVariable("ExecArguments",
+                     cmGlobalFastbuildGenerator::Quote(args.str()));
+
+    fc.WriteVariable("ExecIsGenerator","true");
+    // Currently fastbuild doesn't support more than 1
+    // output for a custom command (soon to change hopefully).
+    // so only use the first one
+    fc.WriteVariable("ExecOutput",
+                     cmGlobalFastbuildGenerator::Quote(outDir + "fbuild.bff"));
+  }
+  fc.WritePopScope();
 }
 
 //----------------------------------------------------------------------------

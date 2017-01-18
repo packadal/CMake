@@ -339,6 +339,9 @@ public:
       static void WriteSettings(FileContext& fileContext,
                                 std::string cacheDir);
 
+      static void WriteBFFRebuildTarget(cmGlobalFastbuildGenerator* gg,
+                                        FileContext& fileContext);
+
       struct CompilerDef
       {
         std::string name;
