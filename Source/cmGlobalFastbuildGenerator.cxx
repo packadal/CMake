@@ -852,8 +852,9 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteConfigurations(
 void cmGlobalFastbuildGenerator::Detail::Generation::WriteTargetDefinitions(
   GenerationContext& context, bool outputGlobals)
 {
-  context.bffFiles.main.WriteSectionHeader(
-    (outputGlobals) ? "Global Target Definitions" : "Target Definitions");
+  if (outputGlobals) {
+    context.bffFiles.main.WriteSectionHeader("Global Target Definitions");
+  }
 
   // Now iterate each target in order
   for (OrderedTargets::iterator targetIter = context.orderedTargets.begin();
