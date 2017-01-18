@@ -58,6 +58,9 @@ public:
   void ComputeTargetObjectDirectory(cmGeneratorTarget*) const CM_OVERRIDE;
   const char* GetCMakeCFGIntDir() const CM_OVERRIDE;
 
+  std::string ExpandCFGIntDir(const std::string& str,
+                              const std::string& config) const CM_OVERRIDE;
+
   static std::string GetActualName() { return "Fastbuild"; }
 
   /// Overloaded methods. @see cmGlobalGenerator::GetDocumentation()
@@ -317,7 +320,10 @@ public:
 
         std::string operator()(const std::string& in)
         {
-          return m_prefix + in + m_suffix;
+          std::string result = m_prefix + in + m_suffix;
+          cmSystemTools::ReplaceString(
+            result, cmGlobalFastbuildGenerator::FASTBUILD_DOLLAR_TAG, "$");
+          return result;
         }
       };
 

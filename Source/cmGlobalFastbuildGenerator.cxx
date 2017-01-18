@@ -492,6 +492,7 @@ std::string cmGlobalFastbuildGenerator::Quote(const std::string& str,
 {
   std::string result = str;
   cmSystemTools::ReplaceString(result, quotation, "^" + quotation);
+  cmSystemTools::ReplaceString(result, FASTBUILD_DOLLAR_TAG, "$");
   return quotation + result + quotation;
 }
 
@@ -1151,6 +1152,21 @@ void cmGlobalFastbuildGenerator::ComputeTargetObjectDirectory(
 const char* cmGlobalFastbuildGenerator::GetCMakeCFGIntDir() const
 {
   return FASTBUILD_DOLLAR_TAG "ConfigName" FASTBUILD_DOLLAR_TAG;
+}
+
+std::string cmGlobalFastbuildGenerator::ExpandCFGIntDir(
+  const std::string& str, const std::string& config) const
+{
+
+  std::string replace = GetCMakeCFGIntDir();
+
+  std::string tmp = str;
+  for (std::string::size_type i = tmp.find(replace); i != std::string::npos;
+       i = tmp.find(replace, i)) {
+    tmp.replace(i, replace.size(), config);
+    i += config.size();
+  }
+  return tmp;
 }
 
 //----------------------------------------------------------------------------
