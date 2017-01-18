@@ -191,9 +191,6 @@ bool cmFastbuildNormalTargetGenerator::WriteCustomBuildRules()
 
         std::stringstream customCommandTargetName;
         customCommandTargetName << customCommandNameBase << (commandCount++);
-        customCommandTargetName
-          << "-" << cmSystemTools::GetFilenameName(sourceFile->GetFullPath());
-        ;
 
         std::string customCommandTargetNameStr = customCommandTargetName.str();
         WriteCustomCommand(sourceFile->GetCustomCommand(), configName,
@@ -241,9 +238,6 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
   mergedOutputs.insert(mergedOutputs.end(), outputs.begin(), outputs.end());
   mergedOutputs.insert(mergedOutputs.end(), byproducts.begin(),
                        byproducts.end());
-  // used as custom build step target name (if no output)
-  // or script file name
-  std::string simpleName = targetName;
 
   // TODO: Double check that none of the outputs are 'symbolic'
   // In which case, FASTBuild won't want them treated as
@@ -269,6 +263,7 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
   std::vector<std::string> inputs;
   std::vector<std::string> orderDependencies;
 
+  std::string scriptBaseName;
   // If this exec node always generates outputs,
   // then we need to make sure we don't define outputs multiple times.
   // but if the command should always run (i.e. post builds etc)
@@ -283,12 +278,16 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
 
     // when generating output file, makes relapath as part of targetName
     // to make it unique
-    std::string relPath = LocalGenerator->ConvertToRelativePath(
-            LocalGenerator->GetState()->GetBinaryDirectory(), mergedOutputs[0]);
+    std::string relPath = ConvertToFastbuildPath(mergedOutputs[0]);
+
+    relPath = LocalGenerator->GetGlobalGenerator()->ExpandCFGIntDir(
+      relPath, configName);
 #ifdef _WIN32
     std::replace(relPath.begin(), relPath.end(), '/', '\\');
 #endif
-    targetName = targetName + relPath;
+    scriptBaseName =
+      targetName + "-" + cmSystemTools::GetFilenameName(relPath);
+    targetName = targetName + "-" + relPath;
 
     // Check if this custom command has already been output.
     // If it has then just drop an alias here to the original
@@ -332,6 +331,7 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
     // Make it's name unique to its host target
     targetName += "-";
     targetName += hostTargetName;
+    scriptBaseName = targetName;
   }
 
   // Take the dependencies listed and split into targets and files.
@@ -360,7 +360,7 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
     workingDirectory += "/";
   }
 
-  std::string scriptFileName(workingDirectory + simpleName + shellExt);
+  std::string scriptFileName(workingDirectory + scriptBaseName + shellExt);
   cmsys::ofstream scriptFile(scriptFileName.c_str());
 
 #ifndef _WIN32
@@ -424,11 +424,13 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
       cmGlobalFastbuildGenerator::Quote("/C " + scriptFileName));
 #else
     fc.WriteVariable("ExecExecutable",
-                     cmGlobalFastbuildGenerator::Quote(scriptFileName));
+                     cmGlobalFastbuildGenerator::Quote(
+                       ConvertToFastbuildPath(scriptFileName)));
 #endif
     if (!workingDirectory.empty()) {
       fc.WriteVariable("ExecWorkingDir",
-                       cmGlobalFastbuildGenerator::Quote(workingDirectory));
+                       cmGlobalFastbuildGenerator::Quote(
+                         ConvertToFastbuildPath(workingDirectory)));
     }
 
     if (inputs.empty()) {
@@ -447,7 +449,8 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
     // output for a custom command (soon to change hopefully).
     // so only use the first one
     fc.WriteVariable("ExecOutput",
-                     cmGlobalFastbuildGenerator::Quote(mergedOutputs[0]));
+                     cmGlobalFastbuildGenerator::Quote(
+                       ConvertToFastbuildPath(mergedOutputs[0])));
   }
   fc.WritePopScope();
 }
@@ -1044,24 +1047,27 @@ void cmFastbuildNormalTargetGenerator::Generate()
 
       // TODO: Remove this if these variables aren't used...
       // They've been added for testing
-      fc.WriteVariable(
-        "TargetOutput",
-        cmGlobalFastbuildGenerator::Quote(targetNames.targetOutput));
+      fc.WriteVariable("TargetOutput",
+                       cmGlobalFastbuildGenerator::Quote(
+                         ConvertToFastbuildPath(targetNames.targetOutput)));
       fc.WriteVariable(
         "TargetOutputImplib",
-        cmGlobalFastbuildGenerator::Quote(targetNames.targetOutputImplib));
+        cmGlobalFastbuildGenerator::Quote(
+          ConvertToFastbuildPath(targetNames.targetOutputImplib)));
+      fc.WriteVariable("TargetOutputReal", cmGlobalFastbuildGenerator::Quote(
+                                             ConvertToFastbuildPath(
+                                               targetNames.targetOutputReal)));
+      fc.WriteVariable("TargetOutDir",
+                       cmGlobalFastbuildGenerator::Quote(
+                         ConvertToFastbuildPath(targetNames.targetOutputDir)));
       fc.WriteVariable(
-        "TargetOutputReal",
-        cmGlobalFastbuildGenerator::Quote(targetNames.targetOutputReal));
-      fc.WriteVariable(
-        "TargetOutDir",
-        cmGlobalFastbuildGenerator::Quote(targetNames.targetOutputDir));
-      fc.WriteVariable("TargetOutCompilePDBDir",
-                                  cmGlobalFastbuildGenerator::Quote(
-                                    targetNames.targetOutputCompilePDBDir));
+        "TargetOutCompilePDBDir",
+        cmGlobalFastbuildGenerator::Quote(
+          ConvertToFastbuildPath(targetNames.targetOutputCompilePDBDir)));
       fc.WriteVariable(
         "TargetOutPDBDir",
-        cmGlobalFastbuildGenerator::Quote(targetNames.targetOutputPDBDir));
+        cmGlobalFastbuildGenerator::Quote(
+          ConvertToFastbuildPath(targetNames.targetOutputPDBDir)));
 
       // Compile directory always needs to exist
       EnsureDirectoryExists(targetNames.targetOutputCompilePDBDir,
