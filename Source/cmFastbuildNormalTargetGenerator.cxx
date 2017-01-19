@@ -416,10 +416,10 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
   fc.WritePushScope();
   {
 #ifdef _WIN32
-    m_fileContext.WriteVariable("ExecExecutable",
+    fc.WriteVariable("ExecExecutable",
                                 cmGlobalFastbuildGenerator::Quote(
                                   cmSystemTools::FindProgram("cmd.exe")));
-    m_fileContext.WriteVariable(
+    fc.WriteVariable(
       "ExecArguments",
       cmGlobalFastbuildGenerator::Quote("/C " + scriptFileName));
 #else
