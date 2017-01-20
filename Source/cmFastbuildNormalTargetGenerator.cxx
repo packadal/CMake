@@ -436,7 +436,9 @@ void cmFastbuildNormalTargetGenerator::WriteCustomCommand(
     if (inputs.empty()) {
       // inputs.push_back("dummy-in");
     }
-    fc.WriteArray("ExecInput", cmGlobalFastbuildGenerator::Wrap(inputs));
+    fc.WriteArray("ExecInput", cmGlobalFastbuildGenerator::Wrap(
+                                 ((cmGlobalFastbuildGenerator*)GlobalGenerator)
+                                   ->ConvertToFastbuildPath(inputs)));
 
     if (mergedOutputs.empty()) {
       fc.WriteVariable("ExecUseStdOutAsOutput", "true");
@@ -1291,9 +1293,11 @@ void cmFastbuildNormalTargetGenerator::Generate()
                           cmGlobalFastbuildGenerator::Quote(ruleName.str()));
           fc.WritePushScope();
 
-          fc.WriteArray(
-            "CompilerInputFiles",
-            cmGlobalFastbuildGenerator::Wrap(objectListIt->second, "'", "'"));
+          fc.WriteArray("CompilerInputFiles",
+                        cmGlobalFastbuildGenerator::Wrap(
+                          ((cmGlobalFastbuildGenerator*)GlobalGenerator)
+                            ->ConvertToFastbuildPath(objectListIt->second),
+                          "'", "'"));
 
           configObjectGroups.push_back(ruleName.str());
 

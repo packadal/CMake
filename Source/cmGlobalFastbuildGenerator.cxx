@@ -1047,7 +1047,8 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteBFFRebuildTarget(
                                       cmOutputConverter::SHELL);
 
     fc.WriteArray("ExecInput",
-                  cmGlobalFastbuildGenerator::Wrap(implicitDeps, "'", "'"));
+                  cmGlobalFastbuildGenerator::Wrap(
+                    gg->ConvertToFastbuildPath(implicitDeps), "'", "'"));
     fc.WriteVariable("ExecExecutable", cmGlobalFastbuildGenerator::Quote(
                                          cmSystemTools::GetCMakeCommand()));
     fc.WriteVariable("ExecArguments",
@@ -1058,7 +1059,8 @@ void cmGlobalFastbuildGenerator::Detail::Generation::WriteBFFRebuildTarget(
     // output for a custom command (soon to change hopefully).
     // so only use the first one
     fc.WriteVariable("ExecOutput",
-                     cmGlobalFastbuildGenerator::Quote(outDir + "fbuild.bff"));
+                     cmGlobalFastbuildGenerator::Quote(
+                       gg->ConvertToFastbuildPath(outDir + "fbuild.bff")));
   }
   fc.WritePopScope();
 }
@@ -1242,3 +1244,12 @@ void cmGlobalFastbuildGenerator::GetDocumentation(cmDocumentationEntry& entry)
 }
 
 //----------------------------------------------------------------------------
+
+std::string cmGlobalFastbuildGenerator::ConvertToFastbuildPath(
+  const std::string& path) 
+{
+  return LocalGenerators[0]->ConvertToRelativePath(
+    ((cmLocalCommonGenerator*)LocalGenerators[0])->GetWorkingDirectory(),
+    path);
+}
+

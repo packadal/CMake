@@ -81,6 +81,19 @@ public:
                                        const std::string& prefix = "'",
                                        const std::string& suffix = "'");
 
+  std::string ConvertToFastbuildPath(const std::string& path);
+
+  template <typename T>
+  std::vector<std::string> ConvertToFastbuildPath(const T& container)
+  {
+    std::vector<std::string> ret;
+    for (typename T::const_iterator it = container.begin();
+         it != container.end(); ++it) {
+      ret.push_back(ConvertToFastbuildPath(*it));
+    }
+    return ret;
+  }
+
   class Detail
   {
   public:

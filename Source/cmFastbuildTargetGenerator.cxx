@@ -1,6 +1,7 @@
 #include "cmFastbuildTargetGenerator.h"
 #include "cmLocalCommonGenerator.h"
 #include "cmGlobalGenerator.h"
+#include "cmGlobalFastbuildGenerator.h"
 
 cmFastbuildTargetGenerator::cmFastbuildTargetGenerator(cmGeneratorTarget* gt)
   : cmCommonTargetGenerator(gt)
@@ -15,10 +16,6 @@ void cmFastbuildTargetGenerator::AddIncludeFlags(std::string& /* flags */,
 std::string cmFastbuildTargetGenerator::ConvertToFastbuildPath(
   const std::string& path)
 {
-
-  const cmLocalCommonGenerator* root =
-    (const cmLocalCommonGenerator*)this->LocalGenerator->GetGlobalGenerator()
-      ->GetLocalGenerators()[0];
-
-  return root->ConvertToRelativePath(root->GetWorkingDirectory(), path);
+  return ((cmGlobalFastbuildGenerator*)GlobalGenerator)
+    ->ConvertToFastbuildPath(path);
 }
