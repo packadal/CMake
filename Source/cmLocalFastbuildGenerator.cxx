@@ -14,6 +14,7 @@
 #include "cmGeneratorTarget.h"
 #include "cmGlobalGenerator.h"
 #include "cmMakefile.h"
+#include "cmState.h"
 #include "cmSourceFile.h"
 #include "cmSystemTools.h"
 
@@ -27,9 +28,15 @@ cmLocalFastbuildGenerator::cmLocalFastbuildGenerator(cmGlobalGenerator* gg,
   : cmLocalCommonGenerator(gg, makefile,
                            makefile->GetState()->GetBinaryDirectory())
 {
-  this->TargetImplib =
-    FASTBUILD_DOLLAR_TAG "TargetOutputImplib" FASTBUILD_DOLLAR_TAG;
   // this->LinkScriptShell = true;
+}
+
+cmRulePlaceholderExpander* cmLocalFastbuildGenerator::CreateRulePlaceholderExpander() const
+{
+    cmRulePlaceholderExpander* ret = new cmRulePlaceholderExpander(
+      this->Compilers, this->VariableMappings, this->CompilerSysroot);
+    ret->SetTargetImpLib(FASTBUILD_DOLLAR_TAG "TargetOutputImplib" FASTBUILD_DOLLAR_TAG);
+    return ret;
 }
 
 //----------------------------------------------------------------------------
@@ -45,20 +52,6 @@ void cmLocalFastbuildGenerator::Generate()
   // GetMakefile()->Print();
 
   // Now generate information for this generator
-}
-
-//----------------------------------------------------------------------------
-void cmLocalFastbuildGenerator::ExpandRuleVariables(
-  std::string& s, const RuleVariables& replaceValues)
-{
-  return cmLocalGenerator::ExpandRuleVariables(s, replaceValues);
-}
-
-//----------------------------------------------------------------------------
-std::string cmLocalFastbuildGenerator::ConvertToLinkReference(
-  std::string const& lib, OutputFormat format)
-{
-  return ""; // this->Convert(lib, HOME_OUTPUT, format);
 }
 
 //----------------------------------------------------------------------------

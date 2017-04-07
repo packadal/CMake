@@ -62,6 +62,12 @@ public:
    */
   static bool SupportsPlatform() { return false; }
 
+  cmLinkLineComputer* CreateLinkLineComputer(
+    cmOutputConverter* outputConverter,
+    cmStateDirectory stateDir) const CM_OVERRIDE;
+
+  std::string ConvertToFastbuildPath(const std::string& path) const;
+
   static std::string Quote(const std::string& str,
                            const std::string& quotation = "'");
 

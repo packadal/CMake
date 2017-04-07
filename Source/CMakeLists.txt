@@ -765,6 +765,8 @@ set(SRCS ${SRCS}
   cmLocalFastbuildGenerator.h
   cmFastbuildTargetGenerator.cxx
   cmFastbuildTargetGenerator.h
+  cmFastbuildLinkLineComputer.cxx
+  cmFastbuildLinkLineComputer.h
   )
 
   if(WIN32 AND NOT CYGWIN)
