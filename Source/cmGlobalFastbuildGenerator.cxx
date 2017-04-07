@@ -107,6 +107,19 @@ missing file: protobuffer.p
 372 - RunCMake.CrosscompilingEmulator (Failed) -- ??
 
 134 - ExternalProjectLocal (Failed) -- target already defined
+
+
+================ master after temporary modifications ===========================
+
+45 - OutDir (Failed)
+46 - ObjectLibrary (Failed)
+60 - SourceGroups (Failed)
+78 - Module.CheckTypeSize (Timeout)
+81 - Module.WriteCompilerDetectionHeader (Timeout)
+162 - MFC (Failed)
+225 - Java.Jar (Failed)
+227 - Java.Javah (Failed)
+360 - RunCMake.CTestTimeoutAfterMatch (Failed)
 ============================================================================*/
 #include "cmGlobalFastbuildGenerator.h"
 
