@@ -9,6 +9,7 @@
 #include "cmStateDirectory.h"
 #include "cmSourceFile.h"
 #include "cmState.h"
+#include "cmGeneratorTarget.h"
 
 #define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
 
@@ -479,11 +480,11 @@ void cmFastbuildNormalTargetGenerator::DetectOutput(
     targetNamesOut.targetOutput = GeneratorTarget->GetFullPath(configName);
     targetNamesOut.targetOutputReal =
       GeneratorTarget->GetFullPath(configName,
-                                   /*implib=*/false,
+                                   cmStateEnums::RuntimeBinaryArtifact,
                                    /*realpath=*/true);
     targetNamesOut.targetOutputImplib =
       GeneratorTarget->GetFullPath(configName,
-                                   /*implib=*/true);
+                                   cmStateEnums::ImportLibraryArtifact);
   } else {
     targetNamesOut.targetOutputDir = Makefile->GetHomeOutputDirectory();
     if (targetNamesOut.targetOutputDir.empty() ||
@@ -1397,15 +1398,15 @@ void cmFastbuildNormalTargetGenerator::Generate()
         linkPath = frameworkPath + linkPath;
 
         if (GeneratorTarget->IsExecutableWithExports()) {
-          const cmSourceFile* def =
-            GeneratorTarget->GetModuleDefinitionFile(configName);
+          const cmGeneratorTarget::ModuleDefinitionInfo* def =
+            GeneratorTarget->GetModuleDefinitionInfo(configName);
           if (def) {
             const char* defFileFlag =
               LocalGenerator->GetMakefile()->GetDefinition(
                 "CMAKE_LINK_DEF_FILE_FLAG");
-            const std::string defFile = def->GetFullPath();
+            const std::string defFile = def->DefFile;
             if (!defFile.empty()) {
-              linkFlags += defFileFlag + def->GetFullPath();
+              linkFlags += defFileFlag + defFile;
             }
           }
         }

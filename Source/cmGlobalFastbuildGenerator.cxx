@@ -277,7 +277,7 @@ void cmGlobalFastbuildGenerator::Detail::Detection::DetectCompilerFlags(
   const cmGeneratorTarget* gt, const cmSourceFile* source,
   const std::string& language, const std::string& configName)
 {
-  lg->AddLanguageFlags(compileFlags, language, configName);
+  lg->AddLanguageFlags(compileFlags, gt, language, configName);
 
   lg->AddArchitectureFlags(compileFlags, gt, language, configName);
 
